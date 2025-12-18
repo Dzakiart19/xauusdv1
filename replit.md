@@ -40,6 +40,10 @@ The bot is built with a modular architecture, refactored from a monolithic desig
     - Notifies subscribers of trade outcomes (WIN/LOSS/BE).
 - **Weekend Handling:** Automatically detects forex market closure (Friday 17:00 NY) and enters a sleep mode, notifying subscribers, and reactivating when the market reopens.
 - **Persistence:** Uses JSON files (`bot_state_v1.2.json`, `user_states.json`, `subscribers.json`) for state and data persistence.
+- **WebSocket Reliability:**
+    - Jittered exponential backoff for reconnection (prevents thundering herd)
+    - Watchdog timer detects stale connections and triggers reconnect
+    - Connection statistics tracking (uptime, total reconnects)
 
 **Feature Specifications:**
 - **Public Bot:** No chat ID restrictions, open to all subscribers.
@@ -65,6 +69,7 @@ The bot is built with a modular architecture, refactored from a monolithic desig
     - **ANALYSIS_INTERVAL=30s**: Increased from 15s → CPU optimization
     - **KEEP_ALIVE_INTERVAL=300s**: Health check every 5 min to prevent sleep
 - **Health Check**: Endpoint at `/health` for Koyeb liveness monitoring (30s interval)
+    - Returns: uptime, subscriber count, WebSocket stats, trading stats, config info
 - **Keep-Alive**: Self-ping loop prevents idle timeout on free tier
 - **Port**: Fixed at 8000 for Koyeb compatibility
 - **Environment Variables**:
@@ -76,3 +81,10 @@ The bot is built with a modular architecture, refactored from a monolithic desig
     - `requirements.txt`: Production dependencies
     - `.dockerignore`: Excludes unnecessary files from build
     - `DEPLOY_KOYEB.md`: Complete deployment guide with troubleshooting
+
+## Recent Changes (December 2024)
+- Added jittered exponential backoff and watchdog timer to WebSocket connection
+- Enhanced health endpoint with detailed metrics (uptime, WS stats, trading stats)
+- Added `get_trade_stats()` method to StateManager for statistics aggregation
+- Fixed `trade_closed` unbound error in signal_engine.py
+- Added guard checks for telegram_service calls to prevent NoneType errors
