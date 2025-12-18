@@ -240,6 +240,13 @@ wss://ws.derivws.com/websockets/v3?app_id=1089
 
 ## Recent Changes
 
+- **V31.1 Friendly Update (Dec 2025)**:
+  - Semua teks bot diperbarui dengan emoji yang friendly dan bersih
+  - Interval tracking dipercepat dari 15 detik menjadi 5 detik
+  - Bot otomatis mencari sinyal 24 jam non-stop saat dimulai
+  - Format pesan lebih rapi dengan separator line (━━━)
+  - Tampilan dashboard dan tracking lebih informatif
+
 - **V31 Public Edition**: 
   - Konversi dari private ke public bot
   - Hapus restriksi TARGET_CHAT_ID
