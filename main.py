@@ -671,10 +671,10 @@ async def signal_engine_loop(bot):
                 trade_closed = False
                 
                 for i in range(6):
-                    await asyncio.sleep(8)
                     current_price = await get_realtime_price()
                     
                     if current_price is None:
+                        await asyncio.sleep(8)
                         continue
                     
                     bot_logger.info(
@@ -683,8 +683,10 @@ async def signal_engine_loop(bot):
                         f"SL: {active_trade['sl_level']:.3f}"
                     )
                     
-                    if i == 0 or i == 5:
+                    if i == 0 or i == 3:
                         await send_tracking_update(bot, current_price)
+                    
+                    await asyncio.sleep(8)
                     
                     result_info = {}
                     trade_status = active_trade['status']
