@@ -5,7 +5,9 @@ import pytz
 
 class BotConfig:
     TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', 'YOUR_BOT_TOKEN')
-    PORT = int(os.environ.get('PORT', 8000))
+    PORT = int(os.environ.get('PORT', 5000))
+    GENERATE_CHARTS = os.environ.get('GENERATE_CHARTS', 'true').lower() == 'true'
+    KEEP_ALIVE_INTERVAL = int(os.environ.get('KEEP_ALIVE_INTERVAL', 300))
     
     STOCH_K = 8
     STOCH_D = 3
@@ -23,8 +25,8 @@ class BotConfig:
     LOT_SIZE = 0.01
     RISK_PER_TRADE_USD = 2.00
     
-    ANALYSIS_INTERVAL = 15
-    ANALYSIS_JITTER = 5
+    ANALYSIS_INTERVAL = 30
+    ANALYSIS_JITTER = 10
     
     CHART_FILENAME = 'chart_v1.2.png'
     USER_STATES_FILENAME = 'user_states.json'

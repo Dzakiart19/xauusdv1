@@ -377,8 +377,20 @@ class SignalEngine:
                             f"📡 Tracking aktif hingga TP/SL tercapai"
                         )
                         
-                        if await generate_chart(df, temp_trade_info, title):
-                            if await self.send_photo(bot, caption):
+                        if BotConfig.GENERATE_CHARTS:
+                            chart_generated = await generate_chart(df, temp_trade_info, title)
+                        else:
+                            chart_generated = True
+                            bot_logger.info("📊 Chart generation disabled (GENERATE_CHARTS=false)")
+                        
+                        if chart_generated:
+                            if BotConfig.GENERATE_CHARTS:
+                                photo_sent = await self.send_photo(bot, caption)
+                            else:
+                                await self.telegram_service.send_to_all_subscribers(bot, caption)
+                                photo_sent = True
+                            
+                            if photo_sent:
                                 self.state_manager.update_current_signal(temp_trade_info)
                                 self.state_manager.set_active_trade_for_subscribers(temp_trade_info)
                                 
