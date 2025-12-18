@@ -76,6 +76,17 @@ class SignalEngine:
         )
         await self.telegram_service.send_to_all_subscribers(bot, restart_msg)
         bot_logger.info("Sent restart notification to all subscribers")
+        
+        if self.state_manager.current_signal:
+            signal = self.state_manager.current_signal
+            rt_price = await self.get_realtime_price()
+            if rt_price:
+                direction = signal['direction']
+                entry = signal['entry_price']
+                status = signal.get('status', 'active')
+                msg = f"🚀 *DERIV TRADE BOT - RESUMING*\n━━━━━━━━━━━━━━━━━\n{direction} position aktif dilanjutkan\nEntry: ${entry:.3f} | Harga: ${rt_price:.3f}"
+                bot_logger.info(f"📍 Deriv Trade Bot: Melanjutkan tracking {direction} trade (Status: {status})")
+                await self.telegram_service.send_tracking_update(bot, rt_price, signal)
     
     async def run(self, bot):
         bot_logger.info("🚀 Starting Signal Engine...")
@@ -102,6 +113,15 @@ class SignalEngine:
         listen_task = asyncio.create_task(self.deriv_ws.listen())
         
         await asyncio.sleep(3)
+        
+        if not self.state_manager.current_signal:
+            for chat_id in self.state_manager.subscribers:
+                user_state = self.state_manager.get_user_state(chat_id)
+                if user_state.get('active_trade'):
+                    self.state_manager.current_signal = user_state['active_trade'].copy()
+                    bot_logger.info(f"✅ Restored active trade from subscriber {chat_id}")
+                    break
+        
         await self.notify_restart(bot)
         
         tracking_counter = 0
