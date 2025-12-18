@@ -3,16 +3,32 @@
     "win_count": 0,
     "loss_count": 0,
     "be_count": 0,
-    "active_trade": {},
-    "tracking_message_id": null,
+    "active_trade": {
+      "direction": "SELL",
+      "entry_price": 4333.81,
+      "tp1_level": 4329.637090819774,
+      "tp2_level": 4327.550636229661,
+      "sl_level": 4337.982909180227,
+      "start_time_utc": "2025-12-18T18:20:48.933288+00:00",
+      "status": "active"
+    },
+    "tracking_message_id": 7648,
     "last_signal_time": null
   },
   "7390867903": {
     "win_count": 0,
     "loss_count": 0,
     "be_count": 0,
-    "active_trade": {},
-    "tracking_message_id": null,
+    "active_trade": {
+      "direction": "SELL",
+      "entry_price": 4333.81,
+      "tp1_level": 4329.637090819774,
+      "tp2_level": 4327.550636229661,
+      "sl_level": 4337.982909180227,
+      "start_time_utc": "2025-12-18T18:20:48.933288+00:00",
+      "status": "active"
+    },
+    "tracking_message_id": 7649,
     "last_signal_time": null
   }
 }
