@@ -105,9 +105,33 @@ class SignalEngine:
         await self.notify_restart(bot)
         
         tracking_counter = 0
+        last_market_closed_notify = None
         
         while True:
             try:
+                market_status = BotConfig.get_market_status()
+                if not market_status['is_open']:
+                    now = datetime.datetime.now()
+                    should_notify = (
+                        last_market_closed_notify is None or 
+                        (now - last_market_closed_notify).total_seconds() > 3600
+                    )
+                    
+                    if should_notify:
+                        bot_logger.info(f"📅 Market tutup: {market_status['message']}")
+                        market_msg = (
+                            "📅 *MARKET TUTUP (WEEKEND)*\n"
+                            "━━━━━━━━━━━━━━━━━━━━━\n\n"
+                            f"🕐 {market_status['message']}\n\n"
+                            "💡 Bot akan otomatis aktif kembali saat market buka.\n"
+                            "📊 Gunakan /dashboard untuk cek status."
+                        )
+                        await self.telegram_service.send_to_all_subscribers(bot, market_msg)
+                        last_market_closed_notify = now
+                    
+                    await asyncio.sleep(BotConfig.MARKET_CHECK_INTERVAL)
+                    continue
+                
                 if not self.deriv_ws.connected:
                     bot_logger.warning("⚠️ WebSocket disconnected, reconnecting...")
                     listen_task.cancel()

@@ -1,4 +1,5 @@
 import os
+import datetime
 import pytz
 
 
@@ -55,3 +56,58 @@ class BotConfig:
     @classmethod
     def get_atr_col(cls):
         return f'ATRr_{cls.ATR_PERIOD}'
+    
+    NY_TZ = pytz.timezone('America/New_York')
+    MARKET_CLOSE_DAY = 4
+    MARKET_CLOSE_HOUR = 17
+    MARKET_OPEN_DAY = 6
+    MARKET_OPEN_HOUR = 17
+    MARKET_CHECK_INTERVAL = 300
+    
+    @classmethod
+    def is_market_open(cls):
+        now_ny = datetime.datetime.now(cls.NY_TZ)
+        weekday = now_ny.weekday()
+        hour = now_ny.hour
+        
+        if weekday == cls.MARKET_CLOSE_DAY and hour >= cls.MARKET_CLOSE_HOUR:
+            return False
+        if weekday == 5:
+            return False
+        if weekday == cls.MARKET_OPEN_DAY and hour < cls.MARKET_OPEN_HOUR:
+            return False
+        
+        return True
+    
+    @classmethod
+    def get_market_status(cls):
+        now_ny = datetime.datetime.now(cls.NY_TZ)
+        weekday = now_ny.weekday()
+        hour = now_ny.hour
+        
+        if cls.is_market_open():
+            return {
+                'is_open': True,
+                'status': '🟢 BUKA',
+                'message': 'Market XAU/USD sedang aktif',
+                'next_change': None
+            }
+        
+        days_until_open = (cls.MARKET_OPEN_DAY - weekday) % 7
+        if days_until_open == 0 and hour >= cls.MARKET_OPEN_HOUR:
+            days_until_open = 7
+        
+        open_time = now_ny.replace(hour=cls.MARKET_OPEN_HOUR, minute=0, second=0, microsecond=0)
+        open_time += datetime.timedelta(days=days_until_open)
+        
+        time_until = open_time - now_ny
+        hours_left = int(time_until.total_seconds() // 3600)
+        mins_left = int((time_until.total_seconds() % 3600) // 60)
+        
+        return {
+            'is_open': False,
+            'status': '🔴 TUTUP',
+            'message': f'Market tutup (Weekend). Buka dalam ~{hours_left}j {mins_left}m',
+            'next_open': open_time.strftime('%A %H:%M NY'),
+            'hours_left': hours_left
+        }

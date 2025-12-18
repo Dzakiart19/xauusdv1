@@ -166,6 +166,11 @@ class TelegramService:
         price_str = f"${current_price:.3f}" if current_price else "N/A"
         subscriber_count = len(self.state_manager.subscribers)
         
+        market_status = BotConfig.get_market_status()
+        market_info = f"📅 Market: *{market_status['status']}*"
+        if not market_status['is_open']:
+            market_info += f"\n   _{market_status['message']}_"
+        
         await update.message.reply_text(
             f"⚙️ *Info Sistem Bot*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -173,6 +178,7 @@ class TelegramService:
             f"🏷️ Symbol: {gold_symbol or 'frxXAUUSD'}\n"
             f"💰 Harga Terakhir: {price_str}\n"
             f"👥 Total Subscriber: {subscriber_count}\n\n"
+            f"{market_info}\n\n"
             f"📊 Data Source: Deriv\n"
             f"⏱️ Interval Analisis: ~10 detik\n"
             f"🔄 Tracking: Aktif saat ada posisi\n\n"
@@ -232,6 +238,8 @@ class TelegramService:
         current_price = deriv_ws.get_current_price() if deriv_ws else None
         price_str = f"${current_price:.3f}" if current_price else "N/A"
         
+        market_status = BotConfig.get_market_status()
+        
         now = datetime.datetime.now(BotConfig.WIB_TZ)
         
         dashboard_text = (
@@ -239,9 +247,13 @@ class TelegramService:
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"🕐 _{now.strftime('%H:%M:%S WIB')}_\n\n"
             f"📡 Status: {ws_status}\n"
+            f"📅 Market: *{market_status['status']}*\n"
             f"💰 Harga: *{price_str}*\n"
             f"🏷️ Symbol: {gold_symbol or 'frxXAUUSD'}\n\n"
         )
+        
+        if not market_status['is_open']:
+            dashboard_text += f"⏰ _{market_status['message']}_\n\n"
         
         active_trade = user_state.get('active_trade', {})
         
