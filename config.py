@@ -23,8 +23,8 @@ class BotConfig:
     LOT_SIZE = 0.01
     RISK_PER_TRADE_USD = 2.00
     
-    ANALYSIS_INTERVAL = 10
-    ANALYSIS_JITTER = 3
+    ANALYSIS_INTERVAL = 15
+    ANALYSIS_JITTER = 5
     
     CHART_FILENAME = 'chart_v1.2.png'
     USER_STATES_FILENAME = 'user_states.json'

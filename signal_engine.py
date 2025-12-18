@@ -250,23 +250,21 @@ class SignalEngine:
                             
                             self.state_manager.update_trade_result(result_info['type'])
                             
-                            closing_df = await self.get_historical_data()
-                            if closing_df is not None:
-                                duration = round(
-                                    (datetime.datetime.now(datetime.timezone.utc) - current_signal['start_time_utc']).total_seconds() / 60,
-                                    1
-                                )
-                                final_title = f"{result_emoji} {result_text}"
-                                
-                                result_caption = (
-                                    f"{result_emoji} *{result_text}*\n"
-                                    f"━━━━━━━━━━━━━━━━━━━━━\n\n"
-                                    f"⏱️ Durasi: *{duration} menit*\n\n"
-                                    f"📊 Gunakan /stats untuk melihat statistik Anda\n\n"
-                                    f"🔍 Bot kembali mencari sinyal..."
-                                )
-                                if await generate_chart(closing_df, current_signal, final_title):
-                                    await self.send_photo(bot, result_caption)
+                            duration = round(
+                                (datetime.datetime.now(datetime.timezone.utc) - current_signal['start_time_utc']).total_seconds() / 60,
+                                1
+                            )
+                            
+                            result_caption = (
+                                f"{result_emoji} *{result_text}*\n"
+                                f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+                                f"💵 Entry: *${entry:.3f}*\n"
+                                f"💰 Exit: *${rt_price:.3f}*\n"
+                                f"⏱️ Durasi: *{duration} menit*\n\n"
+                                f"📊 Gunakan /stats untuk melihat statistik\n"
+                                f"🔍 Bot kembali mencari sinyal..."
+                            )
+                            await self.telegram_service.send_to_all_subscribers(bot, result_caption)
                             
                             if self.state_manager.last_signal_info:
                                 self.state_manager.last_signal_info['status'] = result_text
