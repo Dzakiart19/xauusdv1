@@ -11,11 +11,11 @@ from deriv_ws import DerivWebSocket, find_gold_symbol
 
 
 class SignalEngine:
-    def __init__(self, state_manager, telegram_service):
+    def __init__(self, state_manager, telegram_service=None):
         self.state_manager = state_manager
         self.telegram_service = telegram_service
         self.deriv_ws = None
-        self.gold_symbol = None
+        self.gold_symbol = "frxXAUUSD"
         self.cached_candles_df = None
         self.last_candle_fetch = None
     
@@ -82,8 +82,13 @@ class SignalEngine:
         
         gold_symbols = await find_gold_symbol()
         if gold_symbols:
-            self.gold_symbol = gold_symbols[0].get('symbol', 'frxXAUUSD')
-            bot_logger.info(f"Using gold symbol: {self.gold_symbol}")
+            for s in gold_symbols:
+                if s.get('symbol') == 'frxXAUUSD':
+                    self.gold_symbol = 'frxXAUUSD'
+                    break
+            else:
+                self.gold_symbol = gold_symbols[0].get('symbol', 'frxXAUUSD')
+        bot_logger.info(f"Using gold symbol: {self.gold_symbol}")
         
         self.deriv_ws = DerivWebSocket()
         
@@ -199,6 +204,7 @@ class SignalEngine:
                                 else:
                                     result_info = {'type': 'LOSS', 'emoji': '❌', 'text': 'STOP LOSS HIT'}
                         
+                        trade_closed = False
                         if result_info:
                             result_emoji = result_info['emoji']
                             result_text = result_info['text']

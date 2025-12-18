@@ -41,11 +41,12 @@ class HealthServer:
 
 
 async def self_ping_loop():
+    from aiohttp import ClientTimeout
     await asyncio.sleep(30)
     while True:
         try:
             async with ClientSession() as session:
-                async with session.get(f"http://localhost:{BotConfig.PORT}/health", timeout=10) as resp:
+                async with session.get(f"http://localhost:{BotConfig.PORT}/health", timeout=ClientTimeout(total=10)) as resp:
                     if resp.status == 200:
                         logger.debug("Self-ping successful")
         except Exception as e:

@@ -1,4 +1,4 @@
-# XAU/USD Signal Bot V31.3 - Pro Edition
+# XAU/USD Signal Bot V1.2 - Modular Edition
 
 Bot Telegram untuk signal trading XAU/USD (Gold) menggunakan data real-time dari Deriv WebSocket tanpa memerlukan API key.
 
@@ -16,40 +16,180 @@ Bot ini berfungsi sebagai signal provider yang memberikan notifikasi entry, stop
 - **RSI Confirmation**: Indikator RSI untuk konfirmasi sinyal lebih akurat
 - **Trailing Stop**: Otomatis mengamankan profit dengan trailing stop
 - **Aggressive Mode**: Interval analisis 10 detik untuk respon cepat
+- **Per-user State**: Tracking win/loss/BE per user
 
-## Struktur Project
+## Arsitektur Modular (V1.2)
 
 ```
 /
-├── main.py              # Entry point & signal engine
+├── main.py              # Entry point (~70 baris)
+├── config.py            # BotConfig class - semua konstanta
+├── state_manager.py     # StateManager class - manajemen state per-user
+├── signal_engine.py     # SignalEngine class - logika sinyal
+├── telegram_service.py  # TelegramService class - handlers & messaging
+├── health_server.py     # HealthServer class - HTTP health check
+├── utils.py             # Utility functions (logging, chart generation)
 ├── deriv_ws.py          # Deriv WebSocket connector module
-├── bot_state_v31.json   # State persistence (win/loss/BE counts)
+├── bot_state_v1.2.json  # State persistence
+├── user_states.json     # Per-user state (win/loss/BE counts)
 ├── subscribers.json     # Daftar subscriber
-├── bot_v31.log          # Log file
-├── chart_v31.png        # Generated chart (temporary)
+├── bot_v1.2.log         # Log file
+├── chart_v1.2.png       # Generated chart (temporary)
 └── replit.md            # Dokumentasi
+```
+
+## Komponen Modular
+
+### 1. config.py - BotConfig Class
+
+```python
+BotConfig
+├── Trading Parameters
+│   ├── STOCH_K, STOCH_D, STOCH_SMOOTH  # Stochastic settings
+│   ├── ATR_PERIOD, ATR_MULTIPLIER       # ATR settings
+│   ├── RR_TP1, RR_TP2                   # Risk-reward ratios
+│   ├── ADX_FILTER_PERIOD, THRESHOLD     # ADX filter
+│   ├── RSI_PERIOD, OVERBOUGHT, OVERSOLD # RSI settings
+│   └── LOT_SIZE, RISK_PER_TRADE_USD     # Position sizing
+├── Timing
+│   ├── ANALYSIS_INTERVAL                # 10 seconds
+│   └── ANALYSIS_JITTER                  # 3 seconds
+├── Files
+│   ├── CHART_FILENAME, LOG_FILENAME
+│   └── USER_STATES_FILENAME, SUBSCRIBERS_FILENAME
+└── Helper Methods
+    ├── get_stoch_k_col(), get_stoch_d_col()
+    ├── get_adx_col(), get_ema_col()
+    └── get_rsi_col(), get_atr_col()
+```
+
+### 2. state_manager.py - StateManager Class
+
+```python
+StateManager
+├── User State Management
+│   ├── get_user_state()        # Get/create user state
+│   ├── save_user_states()      # Persist to JSON
+│   ├── load_user_states()      # Load from JSON
+│   └── reset_user_data()       # Reset user statistics
+├── Subscriber Management
+│   ├── add_subscriber()        # Add new subscriber
+│   ├── remove_subscriber()     # Remove subscriber
+│   ├── is_subscriber()         # Check subscription
+│   ├── save_subscribers()      # Persist to JSON
+│   └── load_subscribers()      # Load from JSON
+├── Trade Management
+│   ├── update_trade_result()   # Update win/loss/BE
+│   ├── set_active_trade_for_subscribers()
+│   └── clear_user_tracking_messages()
+└── Signal State
+    ├── current_signal          # Active trade info
+    ├── last_signal_info        # Last signal sent
+    ├── update_current_signal()
+    └── clear_current_signal()
+```
+
+### 3. telegram_service.py - TelegramService Class
+
+```python
+TelegramService
+├── Command Handlers
+│   ├── start()         # /start - Welcome message
+│   ├── subscribe()     # /subscribe - Join signals
+│   ├── unsubscribe()   # /unsubscribe - Leave signals
+│   ├── stats()         # /stats - Trading statistics
+│   ├── riset()         # /riset - Reset data
+│   ├── info()          # /info - System info
+│   ├── dashboard()     # /dashboard - Interactive dashboard
+│   └── signal()        # /signal - Last signal
+├── Callback Handlers
+│   └── button_callback()  # Inline button handler
+├── Messaging
+│   ├── send_dashboard()   # Send dashboard to user
+│   ├── send_to_all_subscribers()  # Broadcast message
+│   └── send_tracking_update()     # Send tracking update
+└── Dependencies
+    ├── state_manager      # State management
+    ├── deriv_ws_getter    # WebSocket getter
+    └── gold_symbol_getter # Symbol getter
+```
+
+### 4. signal_engine.py - SignalEngine Class
+
+```python
+SignalEngine
+├── Data Functions
+│   ├── get_historical_data()   # Get OHLC from Deriv
+│   ├── get_realtime_price()    # Get current price
+│   └── send_photo()            # Send chart to subscribers
+├── Lifecycle
+│   ├── run()                   # Main signal loop
+│   └── notify_restart()        # Send restart notification
+├── Signal Generation
+│   ├── Stochastic crossover detection
+│   ├── ADX trend filter
+│   ├── EMA trend confirmation
+│   └── RSI overbought/oversold filter
+├── Trade Tracking
+│   ├── Monitor TP1/TP2/SL levels
+│   ├── Move SL to BE on TP1 hit
+│   └── Update subscribers on trade result
+└── Dependencies
+    ├── state_manager       # State management
+    ├── telegram_service    # Telegram messaging
+    └── deriv_ws           # WebSocket connection
+```
+
+### 5. health_server.py - HealthServer Class
+
+```python
+HealthServer
+├── HTTP Server
+│   ├── health_handler()  # /health endpoint
+│   ├── start()           # Start server
+│   └── cleanup()         # Cleanup resources
+└── Self-ping
+    └── self_ping_loop()  # Keep-alive pings
+```
+
+### 6. utils.py - Utility Functions
+
+```python
+Utils
+├── Logging
+│   ├── NoHttpxFilter     # Filter noisy logs
+│   ├── setup_logging()   # Configure logging
+│   └── bot_logger        # Main logger instance
+├── Indicators
+│   └── calculate_indicators()  # Stoch, ATR, ADX, EMA, RSI
+├── Chart
+│   └── generate_chart()        # Create candlestick chart
+└── Helpers
+    ├── format_pnl()            # Format P&L display
+    ├── get_win_rate_emoji()    # Get emoji for win rate
+    └── calculate_win_rate()    # Calculate win percentage
 ```
 
 ## Flow Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    BOT STARTUP                              │
+│                    BOT STARTUP (main.py)                     │
 └─────────────────────────────────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  1. Load State (win_count, loss_count, be_count)            │
-│  2. Load Subscribers dari JSON                              │
-│  3. Initialize Telegram Bot (PUBLIC MODE)                   │
-│  4. Find Gold Symbol dari Deriv (frxXAUUSD)                 │
-│  5. Connect ke Deriv WebSocket                              │
-│  6. Subscribe ke tick data                                  │
+│  1. Create StateManager, load states                        │
+│  2. Create SignalEngine                                     │
+│  3. Create TelegramService with callbacks                   │
+│  4. Start HealthServer                                      │
+│  5. Register Telegram handlers                              │
+│  6. Start signal_engine.run()                               │
 └─────────────────────────────────────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   MAIN LOOP (10 detik)                      │
+│               SIGNAL ENGINE LOOP (10 detik)                  │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌─────────────────┐    ┌─────────────────────────────────┐ │
@@ -60,79 +200,17 @@ Bot ini berfungsi sebagai signal provider yang memberikan notifikasi entry, stop
 │  ┌─────────────────┐    ┌─────────────────────────────────┐ │
 │  │ Mode Pelacakan  │    │ Mode Pencarian Sinyal           │ │
 │  │ - Cek harga 5s  │    │ 1. Get candle data (200)        │ │
-│  │ - Monitor SL/TP │    │ 2. Calculate indicators:        │ │
-│  │ - Trailing Stop │    │    - Stochastic (8,3,3)         │ │
-│  │ - Live tracking │    │    - ATR (14)                   │ │
-│  │                 │    │    - ADX (14)                   │ │
-│  └────────┬────────┘    │    - EMA (21)                   │ │
-│           │             │    - RSI (14)                   │ │
-│           ▼             │ 3. Check signal conditions      │ │
-│  ┌─────────────────┐    └────────────────┬────────────────┘ │
-│  │ Trade Result?   │                     │                  │
-│  │ - TP1 Hit       │                     ▼                  │
-│  │ - TP2 Hit (WIN) │    ┌─────────────────────────────────┐ │
-│  │ - SL Hit (LOSS) │    │ Valid Signal Found?             │ │
-│  │ - BE            │    └────────────────┬────────────────┘ │
-│  │ - Trailing Stop │                     │                  │
-│  └────────┬────────┘                     ▼                  │
-│           │             ┌─────────────────────────────────┐ │
-│           ▼             │ YES: Generate Chart             │ │
-│  ┌─────────────────┐    │      Calculate SL/TP            │ │
-│  │ Send Telegram   │    │      Send to ALL Subscribers    │ │
-│  │ to ALL subs     │    │      Set Active Trade           │ │
-│  │ Update Stats    │    │ NO:  Continue loop              │ │
+│  │ - Monitor SL/TP │    │ 2. Calculate indicators         │ │
+│  │ - Live tracking │    │ 3. Check signal conditions      │ │
+│  └────────┬────────┘    └────────────────┬────────────────┘ │
+│           │                              │                  │
+│           ▼                              ▼                  │
+│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
+│  │ Trade Result?   │    │ Valid Signal Found?             │ │
+│  │ - TP1/TP2 Hit   │    │ YES: Generate & Send Signal     │ │
+│  │ - SL Hit        │    │ NO:  Continue loop              │ │
 │  └─────────────────┘    └─────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
-```
-
-## Arsitektur Komponen
-
-### 1. deriv_ws.py - WebSocket Connector
-
-```
-DerivWebSocket Class
-├── connect()           - Connect ke Deriv WebSocket (exponential backoff)
-├── subscribe_ticks()   - Subscribe ke real-time tick
-├── get_candles()       - Get historical OHLC data
-├── get_active_symbols() - Get available symbols
-├── listen()            - Listen untuk incoming messages
-├── send_ping()         - Keep-alive ping
-├── get_current_price() - Get latest price
-└── close()             - Close connection
-```
-
-### 2. main.py - Signal Engine (Public Mode)
-
-```
-Main Bot
-├── Telegram Handlers
-│   ├── /start      - Welcome message dengan button
-│   ├── /subscribe  - Berlangganan sinyal
-│   ├── /unsubscribe- Berhenti berlangganan
-│   ├── /dashboard  - Dashboard real-time
-│   ├── /signal     - Lihat sinyal terakhir
-│   ├── /stats      - Show statistics
-│   └── /info       - System info
-├── Subscriber Management
-│   ├── save_subscribers()      - Simpan ke JSON
-│   ├── load_subscribers()      - Load dari JSON
-│   └── send_to_all_subscribers()- Broadcast ke semua
-├── Data Functions
-│   ├── get_historical_data()   - Get OHLC from Deriv
-│   └── get_realtime_price()    - Get current price
-├── Dashboard & Tracking
-│   ├── send_dashboard()        - Kirim dashboard interaktif
-│   └── send_tracking_update()  - Update posisi real-time
-├── Analysis
-│   └── calculate_indicators()  - Stoch, ATR, ADX, EMA, RSI
-├── Signal Engine
-│   └── signal_engine_loop()    - Main trading loop
-├── Trade Management
-│   └── Trailing Stop Logic     - Otomatis geser SL mengikuti profit
-└── Utilities
-    ├── generate_chart()        - Create candlestick chart
-    ├── send_photo()            - Send to all subscribers
-    └── save/load_state()       - Persistence
 ```
 
 ## Strategi Trading
@@ -163,9 +241,8 @@ Main Bot
 
 1. **Active**: Monitoring SL dan TP1
 2. **TP1 Hit**: Pindahkan SL ke entry (Break Even)
-3. **Trailing Stop**: Saat profit >= 5 pips, SL otomatis mengikuti 50% profit
-4. **TP2 Hit**: Trade ditutup sebagai WIN
-5. **SL Hit**: Trade ditutup sebagai LOSS/BE/WIN (tergantung trailing)
+3. **TP2 Hit**: Trade ditutup sebagai WIN
+4. **SL Hit**: Trade ditutup sebagai LOSS/BE
 
 ## Telegram Commands
 
@@ -177,37 +254,14 @@ Main Bot
 | /dashboard | Dashboard real-time (harga, posisi, statistik) |
 | /signal | Lihat sinyal terakhir yang dikirim |
 | /stats | Lihat statistik trading |
+| /riset | Reset data trading |
 | /info | Info sistem (connection, price, subscriber count) |
-
-## Dashboard Features
-
-Dashboard menampilkan:
-- Status koneksi WebSocket
-- Harga XAU/USD real-time
-- Posisi aktif (jika ada):
-  - Arah (BUY/SELL)
-  - Entry price
-  - TP1, TP2, SL levels
-  - Estimasi P&L dalam pips
-  - Status (Aktif / BE Mode)
-- Statistik trading (Win/Loss/BE)
-- Tombol Refresh
-
-## Real-time Tracking
-
-Saat ada posisi aktif, bot mengirimkan update setiap ~5 detik berisi:
-- Harga real-time
-- Estimasi P&L
-- Jarak ke TP1, TP2, SL
-- Status posisi
 
 ## Environment Variables
 
 | Variable | Deskripsi |
 |----------|-----------|
 | TELEGRAM_BOT_TOKEN | Token dari @BotFather |
-
-**Catatan**: TARGET_CHAT_ID tidak diperlukan lagi karena bot sekarang public.
 
 ## Data Source: Deriv WebSocket
 
@@ -225,58 +279,22 @@ wss://ws.derivws.com/websockets/v3?app_id=1089
 - `active_symbols` - Available symbols
 - `ping` - Keep-alive
 
-## Best Practices
-
-### 1. Connection Management
-- Reconnect otomatis dengan exponential backoff
-- Keep-alive ping setiap 30 detik
-- Max 15 reconnection attempts
-- Delay 2s - 60s dengan exponential backoff
-
-### 2. Data Handling
-- Buffer 200 candles untuk indicator calculation
-- Use deque untuk efficient memory usage
-- Timeout 15 detik untuk API calls
-
-### 3. Error Handling
-- Graceful degradation saat data tidak tersedia
-- Logging semua error ke file
-- State persistence untuk recovery
-- Auto-remove blocked subscribers
-
-### 4. Performance
-- Asyncio untuk concurrent operations
-- Background task untuk WebSocket listening
-- Efficient indicator calculation dengan pandas_ta
-- Rate-limited tracking updates
-
 ## Recent Changes
+
+- **V1.2 Modular Edition (Dec 2025)**:
+  - Refactored monolithic main.py (1200+ baris) menjadi arsitektur modular
+  - Buat BotConfig class untuk semua constants
+  - Buat StateManager class untuk manajemen state per-user
+  - Buat SignalEngine class untuk logika signal generation
+  - Buat TelegramService class untuk Telegram handlers
+  - Buat HealthServer class untuk HTTP health check
+  - Buat utils.py untuk utility functions
+  - main.py sekarang hanya ~70 baris (entry point)
+  - Dependency injection pattern untuk decoupling
+  - Per-user state tracking (win/loss/BE per user)
 
 - **V31.3 Pro Update (Dec 2025)**:
   - Interval analisis dipercepat dari 20 detik menjadi 10 detik
   - Tambah indikator RSI untuk konfirmasi sinyal lebih akurat
-  - Tambah fitur trailing stop untuk mengamankan profit
   - Tambah command /signal untuk lihat sinyal terakhir
   - WebSocket reconnection dengan exponential backoff
-  - Max reconnection attempts ditingkatkan ke 15
-
-- **V31.2 Aggressive Update (Dec 2025)**:
-  - Interval analisis dipercepat dari 60 detik menjadi 20 detik dengan random jitter
-  - Active trade disimpan ke file (survive restart)
-  - WebSocket reconnection logic lebih robust
-
-- **V31.1 Friendly Update (Dec 2025)**:
-  - Semua teks bot diperbarui dengan emoji yang friendly dan bersih
-  - Interval tracking dipercepat dari 15 detik menjadi 5 detik
-  - Bot otomatis mencari sinyal 24 jam non-stop saat dimulai
-  - Format pesan lebih rapi dengan separator line (━━━)
-  - Tampilan dashboard dan tracking lebih informatif
-
-- **V31 Public Edition**: 
-  - Konversi dari private ke public bot
-  - Hapus restriksi TARGET_CHAT_ID
-  - Tambah sistem subscriber management
-  - Tambah dashboard interaktif
-  - Tambah real-time tracking update
-  - Tambah inline keyboard buttons
-  - Auto-cleanup blocked subscribers

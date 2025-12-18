@@ -115,7 +115,8 @@ async def generate_chart(df, trade_info=None, title="XAU/USD Chart"):
             ax.text(text_x, sl, f'SL ${sl:.2f}', color='#e74c3c', fontsize=8, va='center')
         
         fig.savefig(BotConfig.CHART_FILENAME, dpi=150, bbox_inches='tight', facecolor='#1a1a2e')
-        mpf.close(fig)
+        import matplotlib.pyplot as plt
+        plt.close(fig)
         
         return True
         
