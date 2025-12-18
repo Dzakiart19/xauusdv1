@@ -607,6 +607,51 @@ async def generate_chart(df, trade_info, title):
         bot_logger.error(f"CHART-ERROR: {e}")
         return False
 
+async def send_startup_notification(bot):
+    """Kirim notifikasi ke semua subscriber saat bot restart"""
+    if not subscribers:
+        bot_logger.info("📭 Tidak ada subscriber untuk dinotifikasi saat startup")
+        return
+    
+    now = datetime.datetime.now(wib_tz)
+    
+    startup_text = (
+        f"🚀 *BOT AKTIF KEMBALI!*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🕐 _{now.strftime('%d/%m/%Y %H:%M:%S WIB')}_\n\n"
+        f"🔄 Bot telah restart dan siap beroperasi!\n\n"
+        f"🔍 *Status:* Otomatis mencari sinyal...\n"
+        f"📡 *Data:* Deriv WebSocket\n"
+        f"⏱️ *Mode:* 24 Jam Non-Stop\n\n"
+    )
+    
+    if active_trade:
+        direction = active_trade.get('direction', 'N/A')
+        entry = active_trade.get('entry_price', 0)
+        startup_text += (
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚠️ *Trade Aktif Terdeteksi:*\n"
+            f"{'📈' if direction == 'BUY' else '📉'} {direction} @ ${entry:.3f}\n"
+            f"📊 Tracking akan dilanjutkan otomatis\n\n"
+        )
+    else:
+        startup_text += (
+            f"💡 Anda tidak perlu klik apa-apa.\n"
+            f"📬 Sinyal akan dikirim otomatis!\n\n"
+        )
+    
+    startup_text += f"👥 Total Subscriber Aktif: *{len(subscribers)}*"
+    
+    for chat_id in subscribers.copy():
+        try:
+            await bot.send_message(chat_id=chat_id, text=startup_text, parse_mode='Markdown')
+            bot_logger.info(f"✅ Notifikasi startup terkirim ke {chat_id}")
+        except TelegramError as e:
+            bot_logger.error(f"❌ Gagal kirim notifikasi startup ke {chat_id}: {e}")
+            if "blocked" in str(e).lower() or "not found" in str(e).lower():
+                subscribers.discard(chat_id)
+                save_subscribers()
+
 async def signal_engine_loop(bot):
     global active_trade, win_count, loss_count, be_count, deriv_ws, gold_symbol
     
@@ -635,6 +680,8 @@ async def signal_engine_loop(bot):
                 await deriv_ws.send_ping()
     
     keepalive_task = asyncio.create_task(keep_alive())
+    
+    await send_startup_notification(bot)
     
     bot_logger.info("🔍 Mesin sinyal dimulai - Mencari sinyal 24 jam...")
     
@@ -685,8 +732,9 @@ async def signal_engine_loop(bot):
                     
                     if i == 0 or i == 3:
                         await send_tracking_update(bot, current_price)
-                    
-                    await asyncio.sleep(8)
+                        await asyncio.sleep(8)
+                    else:
+                        await asyncio.sleep(8)
                     
                     result_info = {}
                     trade_status = active_trade['status']

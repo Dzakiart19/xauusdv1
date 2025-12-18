@@ -3,7 +3,7 @@
     "entry_price": 4326.06,
     "tp1_level": 4323.906538661606,
     "tp2_level": 4322.829807992408,
-    "sl_level": 4328.213461338395,
+    "sl_level": 4324.950000000001,
     "start_time_utc": "2025-12-18T09:23:04.837059+00:00",
-    "status": "active"
+    "status": "tp1_hit"
 }
