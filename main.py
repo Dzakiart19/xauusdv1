@@ -134,7 +134,9 @@ def load_subscribers():
     except Exception as e:
         bot_logger.error(f"Failed to load subscribers: {e}")
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
     chat_id = str(update.message.chat_id)
     
     keyboard = [
@@ -165,7 +167,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-async def subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
     chat_id = str(update.message.chat_id)
     
     if chat_id in subscribers:
@@ -188,7 +192,9 @@ async def subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         bot_logger.info(f"New subscriber: {chat_id}")
 
-async def unsubscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def unsubscribe(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
     chat_id = str(update.message.chat_id)
     
     if chat_id in subscribers:
@@ -208,7 +214,9 @@ async def unsubscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
 
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
     total = win_count + loss_count + be_count
     win_rate = (win_count / (win_count + loss_count)) * 100 if (win_count + loss_count) > 0 else 0.0
     
@@ -231,7 +239,9 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not update.message:
+        return
     status = "🟢 Terhubung" if (deriv_ws and deriv_ws.connected) else "🔴 Terputus"
     current_price = deriv_ws.get_current_price() if deriv_ws else None
     price_str = f"${current_price:.3f}" if current_price else "N/A"
@@ -251,11 +261,11 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message:
         await send_dashboard(update.message.chat_id, context.bot)
 
-async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message:
         return
     
@@ -371,11 +381,13 @@ async def send_dashboard(chat_id, bot):
     except Exception as e:
         bot_logger.error(f"Failed to send dashboard: {e}")
 
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
+    if not query or not query.message:
+        return
     await query.answer()
     
-    chat_id = str(query.message.chat_id)
+    chat_id = str(query.message.chat_id)  # type: ignore
     
     if query.data == "subscribe":
         if chat_id in subscribers:
@@ -449,12 +461,12 @@ async def get_historical_data():
         symbol = gold_symbol or "frxXAUUSD"
         candles = await deriv_ws.get_candles(symbol=symbol, count=200, granularity=60)
         
-        if not candles:
+        if not candles or not isinstance(candles, list):
             bot_logger.warning("No candle data received")
             return None
         
         df_data = []
-        for c in candles:
+        for c in candles:  # type: ignore
             df_data.append({
                 'date': datetime.datetime.fromtimestamp(c['epoch'], tz=datetime.timezone.utc),
                 'Open': float(c['open']),
@@ -660,8 +672,8 @@ async def signal_engine_loop(bot):
                 bot_logger.info(f"🎯 Mode Pelacakan (Trade {active_trade['direction']})")
                 trade_closed = False
                 
-                for i in range(12):
-                    await asyncio.sleep(5)
+                for i in range(6):
+                    await asyncio.sleep(8)
                     current_price = await get_realtime_price()
                     
                     if current_price is None:
@@ -673,7 +685,8 @@ async def signal_engine_loop(bot):
                         f"SL: {active_trade['sl_level']:.3f}"
                     )
                     
-                    await send_tracking_update(bot, current_price)
+                    if i < 2:
+                        await send_tracking_update(bot, current_price)
                     
                     result_info = {}
                     trade_status = active_trade['status']
@@ -742,6 +755,8 @@ async def signal_engine_loop(bot):
                         await send_to_all_subscribers(bot, tp1_text)
                     
                     elif result_info.get('type') in ['WIN', 'LOSS', 'BREAK_EVEN']:
+                        result_emoji = "❓"
+                        result_text = "UNKNOWN"
                         if result_info['type'] == 'WIN':
                             win_count += 1
                             result_emoji = "🏆"
