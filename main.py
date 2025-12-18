@@ -3,6 +3,7 @@ import datetime
 import os
 import json
 import logging
+import random
 import pandas as pd
 import pandas_ta as ta
 import pytz
@@ -27,6 +28,13 @@ ADX_FILTER_THRESHOLD = 15
 MA_SHORT_PERIOD = 21
 LOT_SIZE = 0.01
 RISK_PER_TRADE_USD = 2.00
+
+ANALYSIS_INTERVAL = 20
+ANALYSIS_JITTER = 5
+ACTIVE_TRADE_FILENAME = 'active_trade.json'
+
+cached_candles_df = None
+last_candle_fetch = None
 
 active_trade = {}
 win_count = 0
@@ -69,6 +77,31 @@ def save_state():
     state = {'win_count': win_count, 'loss_count': loss_count, 'be_count': be_count}
     with open(STATE_FILENAME, 'w') as f:
         json.dump(state, f, indent=4)
+
+def save_active_trade():
+    if active_trade:
+        trade_data = active_trade.copy()
+        if 'start_time_utc' in trade_data and isinstance(trade_data['start_time_utc'], datetime.datetime):
+            trade_data['start_time_utc'] = trade_data['start_time_utc'].isoformat()
+        with open(ACTIVE_TRADE_FILENAME, 'w') as f:
+            json.dump(trade_data, f, indent=4)
+    else:
+        if os.path.exists(ACTIVE_TRADE_FILENAME):
+            os.remove(ACTIVE_TRADE_FILENAME)
+
+def load_active_trade():
+    global active_trade
+    try:
+        if os.path.exists(ACTIVE_TRADE_FILENAME):
+            with open(ACTIVE_TRADE_FILENAME, 'r') as f:
+                trade_data = json.load(f)
+            if 'start_time_utc' in trade_data:
+                trade_data['start_time_utc'] = datetime.datetime.fromisoformat(trade_data['start_time_utc'])
+            active_trade = trade_data
+            bot_logger.info(f"🔄 Trade aktif dimuat: {active_trade['direction']} @ ${active_trade['entry_price']:.3f}")
+    except Exception as e:
+        bot_logger.error(f"Gagal memuat active trade: {e}")
+        active_trade = {}
 
 def load_state():
     global win_count, loss_count, be_count
@@ -207,7 +240,7 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💰 Harga Terakhir: {price_str}\n"
         f"👥 Total Subscriber: {subscriber_count}\n\n"
         f"📊 Data Source: Deriv\n"
-        f"⏱️ Interval: 1 menit\n"
+        f"⏱️ Interval Analisis: ~20 detik\n"
         f"🔄 Update Tracking: 5 detik\n\n"
         f"🤖 Bot berjalan 24 jam non-stop!",
         parse_mode='Markdown'
@@ -624,6 +657,7 @@ async def signal_engine_loop(bot):
                     if result_info.get('type') == 'TP1_HIT':
                         active_trade['status'] = 'tp1_hit'
                         active_trade['sl_level'] = active_trade['entry_price']
+                        save_active_trade()
                         
                         tp1_text = (
                             f"🎯 *TP1 TERCAPAI!*\n"
@@ -674,6 +708,7 @@ async def signal_engine_loop(bot):
                                 await send_photo(bot, result_caption)
                         
                         active_trade = {}
+                        save_active_trade()
                         trade_closed = True
                         clear_tracking_messages()
                         break
@@ -760,6 +795,7 @@ async def signal_engine_loop(bot):
                     if await generate_chart(df, temp_trade_info, title):
                         if await send_photo(bot, caption):
                             active_trade = temp_trade_info
+                            save_active_trade()
                             clear_tracking_messages()
                             current_price = await get_realtime_price()
                             if current_price:
@@ -769,15 +805,16 @@ async def signal_engine_loop(bot):
                     bot_logger.info("🔍 Tidak ada sinyal valid saat ini. Terus mencari...")
             
             if not active_trade:
-                bot_logger.info("⏳ Menunggu 60 detik sebelum analisis berikutnya...")
-                await asyncio.sleep(60)
+                wait_time = ANALYSIS_INTERVAL + random.randint(-ANALYSIS_JITTER, ANALYSIS_JITTER)
+                bot_logger.info(f"⏳ Menunggu {wait_time} detik sebelum analisis berikutnya...")
+                await asyncio.sleep(wait_time)
         
         except asyncio.TimeoutError:
             bot_logger.error("⚠️ TIMEOUT: Proses terlalu lama")
-            await asyncio.sleep(60)
+            await asyncio.sleep(ANALYSIS_INTERVAL)
         except Exception as e:
             bot_logger.critical(f"❌ Error kritis: {e}")
-            await asyncio.sleep(60)
+            await asyncio.sleep(ANALYSIS_INTERVAL)
 
 async def main():
     if 'YOUR_BOT_TOKEN' in TELEGRAM_BOT_TOKEN:
@@ -787,6 +824,7 @@ async def main():
     
     load_state()
     load_subscribers()
+    load_active_trade()
     
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))

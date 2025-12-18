@@ -240,6 +240,11 @@ wss://ws.derivws.com/websockets/v3?app_id=1089
 
 ## Recent Changes
 
+- **V31.2 Aggressive Update (Dec 2025)**:
+  - Interval analisis dipercepat dari 60 detik menjadi 20 detik dengan random jitter
+  - Active trade disimpan ke file (survive restart)
+  - WebSocket reconnection logic lebih robust
+
 - **V31.1 Friendly Update (Dec 2025)**:
   - Semua teks bot diperbarui dengan emoji yang friendly dan bersih
   - Interval tracking dipercepat dari 15 detik menjadi 5 detik
