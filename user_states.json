@@ -11,16 +11,8 @@
     "win_count": 0,
     "loss_count": 0,
     "be_count": 0,
-    "active_trade": {
-      "direction": "BUY",
-      "entry_price": 4325.33,
-      "tp1_level": 4327.2350085163835,
-      "tp2_level": 4328.187512774575,
-      "sl_level": 4323.424991483616,
-      "start_time_utc": "2025-12-18T10:11:06.264228+00:00",
-      "status": "active"
-    },
-    "tracking_message_id": 7579,
+    "active_trade": {},
+    "tracking_message_id": null,
     "last_signal_time": null
   }
 }
