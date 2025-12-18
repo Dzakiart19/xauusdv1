@@ -20,9 +20,6 @@ class SignalEngine:
         self.last_candle_fetch = None
         self.signal_history = []
         self.last_signal_cooldown = None
-        self.max_signals_per_day = 10
-        self.signals_today = 0
-        self.last_date_check = None
     
     def _has_telegram_service(self):
         """Check if telegram service is available"""
@@ -310,8 +307,11 @@ class SignalEngine:
                     stoch_d_col = BotConfig.get_stoch_d_col()
                     adx_col = BotConfig.get_adx_col()
                     ema_col = BotConfig.get_ema_col()
+                    ema_med_col = BotConfig.get_ema_medium_col()
                     rsi_col = BotConfig.get_rsi_col()
                     atr_col = BotConfig.get_atr_col()
+                    macd_col, macd_hist_col, macd_signal_col = BotConfig.get_macd_cols()
+                    bb_lower, bb_mid, bb_upper = BotConfig.get_bb_cols()
                     
                     required_cols = [stoch_k_col, stoch_d_col, adx_col, ema_col, rsi_col, atr_col]
                     if any(pd.isna(latest.get(col)) or pd.isna(previous.get(col)) for col in required_cols[:2]):
@@ -319,26 +319,55 @@ class SignalEngine:
                         await asyncio.sleep(BotConfig.ANALYSIS_INTERVAL)
                         continue
                     
-                    is_buy = (previous[stoch_k_col] < previous[stoch_d_col] and latest[stoch_k_col] > latest[stoch_d_col])
-                    is_sell = (previous[stoch_k_col] > previous[stoch_d_col] and latest[stoch_k_col] < latest[stoch_d_col])
+                    is_stoch_buy = (previous[stoch_k_col] < previous[stoch_d_col] and latest[stoch_k_col] > latest[stoch_d_col])
+                    is_stoch_sell = (previous[stoch_k_col] > previous[stoch_d_col] and latest[stoch_k_col] < latest[stoch_d_col])
                     
                     adx_value = latest[adx_col]
                     ma_value = latest[ema_col]
+                    ma_med_value = latest[ema_med_col] if ema_med_col in latest.index else None
                     rsi_value = latest[rsi_col]
+                    macd_value = latest[macd_col] if macd_col in latest.index else None
+                    macd_hist = latest[macd_hist_col] if macd_hist_col in latest.index else None
                     
                     if pd.isna(adx_value) or pd.isna(ma_value) or pd.isna(rsi_value):
-                        bot_logger.warning("⚠️ ADX/EMA/RSI NaN detected, skipping...")
+                        bot_logger.warning("⚠️ Core indicators NaN detected, waiting...")
                         await asyncio.sleep(BotConfig.ANALYSIS_INTERVAL)
                         continue
                     
-                    bot_logger.info(f"📊 Data Sinyal: StochBuy={is_buy}, StochSell={is_sell}, ADX={adx_value:.2f}, EMA={ma_value:.2f}, RSI={rsi_value:.2f}")
+                    buy_confirmations = 0
+                    sell_confirmations = 0
+                    
+                    if is_stoch_buy and latest_close > ma_value:
+                        buy_confirmations += 1
+                    if is_stoch_sell and latest_close < ma_value:
+                        sell_confirmations += 1
+                    
+                    if adx_value >= BotConfig.ADX_FILTER_THRESHOLD:
+                        buy_confirmations += 1
+                        sell_confirmations += 1
+                    
+                    if rsi_value < BotConfig.RSI_OVERBOUGHT:
+                        buy_confirmations += 0.5
+                    if rsi_value > BotConfig.RSI_OVERSOLD:
+                        sell_confirmations += 0.5
+                    
+                    if ma_med_value and latest_close > ma_med_value:
+                        buy_confirmations += 0.5
+                    if ma_med_value and latest_close < ma_med_value:
+                        sell_confirmations += 0.5
+                    
+                    if macd_hist and macd_hist > 0:
+                        buy_confirmations += 0.5
+                    if macd_hist and macd_hist < 0:
+                        sell_confirmations += 0.5
+                    
+                    bot_logger.info(f"📊 Analysis: Stoch={is_stoch_buy}/{is_stoch_sell}, ADX={adx_value:.1f}, RSI={rsi_value:.1f}, BuyCon={buy_confirmations:.1f}, SellCon={sell_confirmations:.1f}")
                     
                     final_signal = None
-                    if adx_value >= BotConfig.ADX_FILTER_THRESHOLD:
-                        if is_buy and latest_close > ma_value and rsi_value < BotConfig.RSI_OVERBOUGHT:
-                            final_signal = 'BUY'
-                        elif is_sell and latest_close < ma_value and rsi_value > BotConfig.RSI_OVERSOLD:
-                            final_signal = 'SELL'
+                    if buy_confirmations >= 2.0:
+                        final_signal = 'BUY'
+                    elif sell_confirmations >= 2.0:
+                        final_signal = 'SELL'
                     
                     if final_signal:
                         bot_logger.info(f"🎯 Sinyal {final_signal} valid ditemukan!")

@@ -19,14 +19,24 @@ class BotConfig:
     ADX_FILTER_PERIOD = 14
     ADX_FILTER_THRESHOLD = 15
     MA_SHORT_PERIOD = 21
+    MA_MEDIUM_PERIOD = 50
     RSI_PERIOD = 14
     RSI_OVERBOUGHT = 70
     RSI_OVERSOLD = 30
+    MACD_FAST = 12
+    MACD_SLOW = 26
+    MACD_SIGNAL = 9
+    BB_LENGTH = 20
+    BB_MULT = 2
     LOT_SIZE = 0.01
     RISK_PER_TRADE_USD = 2.00
     
     ANALYSIS_INTERVAL = 30
     ANALYSIS_JITTER = 10
+    
+    UNLIMITED_SIGNALS = True
+    MULTI_TIMEFRAME_ENABLED = True
+    MIN_INDICATOR_CONSENSUS = 3
     
     CHART_FILENAME = 'chart_v1.2.png'
     USER_STATES_FILENAME = 'user_states.json'
@@ -52,12 +62,28 @@ class BotConfig:
         return f'EMA_{cls.MA_SHORT_PERIOD}'
     
     @classmethod
+    def get_ema_medium_col(cls):
+        return f'EMA_{cls.MA_MEDIUM_PERIOD}'
+    
+    @classmethod
     def get_rsi_col(cls):
         return f'RSI_{cls.RSI_PERIOD}'
     
     @classmethod
     def get_atr_col(cls):
         return f'ATRr_{cls.ATR_PERIOD}'
+    
+    @classmethod
+    def get_macd_cols(cls):
+        return (f'MACD_{cls.MACD_FAST}_{cls.MACD_SLOW}_{cls.MACD_SIGNAL}',
+                f'MACDh_{cls.MACD_FAST}_{cls.MACD_SLOW}_{cls.MACD_SIGNAL}',
+                f'MACDs_{cls.MACD_FAST}_{cls.MACD_SLOW}_{cls.MACD_SIGNAL}')
+    
+    @classmethod
+    def get_bb_cols(cls):
+        return (f'BBL_{cls.BB_LENGTH}_{cls.BB_MULT}',
+                f'BBM_{cls.BB_LENGTH}_{cls.BB_MULT}',
+                f'BBU_{cls.BB_LENGTH}_{cls.BB_MULT}')
     
     NY_TZ = pytz.timezone('America/New_York')
     MARKET_CLOSE_DAY = 4

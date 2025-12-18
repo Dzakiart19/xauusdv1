@@ -43,7 +43,10 @@ def calculate_indicators(df):
     df.ta.atr(length=BotConfig.ATR_PERIOD, append=True)
     df.ta.adx(length=BotConfig.ADX_FILTER_PERIOD, append=True)
     df.ta.ema(length=BotConfig.MA_SHORT_PERIOD, append=True)
+    df.ta.ema(length=BotConfig.MA_MEDIUM_PERIOD, append=True)
     df.ta.rsi(length=BotConfig.RSI_PERIOD, append=True)
+    df.ta.macd(fast=BotConfig.MACD_FAST, slow=BotConfig.MACD_SLOW, signal=BotConfig.MACD_SIGNAL, append=True)
+    df.ta.bbands(length=BotConfig.BB_LENGTH, std=BotConfig.BB_MULT, append=True)
     return df
 
 
