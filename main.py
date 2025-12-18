@@ -685,9 +685,6 @@ async def signal_engine_loop(bot):
                         f"SL: {active_trade['sl_level']:.3f}"
                     )
                     
-                    if i < 2:
-                        await send_tracking_update(bot, current_price)
-                    
                     result_info = {}
                     trade_status = active_trade['status']
                     
