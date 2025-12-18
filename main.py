@@ -26,11 +26,14 @@ RR_TP2 = 1.5
 ADX_FILTER_PERIOD = 14
 ADX_FILTER_THRESHOLD = 15
 MA_SHORT_PERIOD = 21
+RSI_PERIOD = 14
+RSI_OVERBOUGHT = 70
+RSI_OVERSOLD = 30
 LOT_SIZE = 0.01
 RISK_PER_TRADE_USD = 2.00
 
-ANALYSIS_INTERVAL = 20
-ANALYSIS_JITTER = 5
+ANALYSIS_INTERVAL = 10
+ANALYSIS_JITTER = 3
 ACTIVE_TRADE_FILENAME = 'active_trade.json'
 
 cached_candles_df = None
@@ -440,6 +443,7 @@ def calculate_indicators(df):
     df.ta.atr(length=ATR_PERIOD, append=True)
     df.ta.adx(length=ADX_FILTER_PERIOD, append=True)
     df.ta.ema(length=MA_SHORT_PERIOD, append=True)
+    df.ta.rsi(length=RSI_PERIOD, append=True)
     return df
 
 async def send_to_all_subscribers(bot, text, photo_path=None):
@@ -733,14 +737,15 @@ async def signal_engine_loop(bot):
                 
                 adx_value = latest[f'ADX_{ADX_FILTER_PERIOD}']
                 ma_value = latest[f'EMA_{MA_SHORT_PERIOD}']
+                rsi_value = latest[f'RSI_{RSI_PERIOD}']
                 
-                bot_logger.info(f"📊 Data Sinyal: StochBuy={is_buy}, StochSell={is_sell}, ADX={adx_value:.2f}, EMA={ma_value:.2f}")
+                bot_logger.info(f"📊 Data Sinyal: StochBuy={is_buy}, StochSell={is_sell}, ADX={adx_value:.2f}, EMA={ma_value:.2f}, RSI={rsi_value:.2f}")
                 
                 final_signal = None
                 if adx_value >= ADX_FILTER_THRESHOLD:
-                    if is_buy and latest_close > ma_value:
+                    if is_buy and latest_close > ma_value and rsi_value < RSI_OVERBOUGHT:
                         final_signal = 'BUY'
-                    elif is_sell and latest_close < ma_value:
+                    elif is_sell and latest_close < ma_value and rsi_value > RSI_OVERSOLD:
                         final_signal = 'SELL'
                 
                 if final_signal:
