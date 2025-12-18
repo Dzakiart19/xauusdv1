@@ -57,3 +57,14 @@ The bot is built with a modular architecture, refactored from a monolithic desig
 - **Telegram Bot API:**
     - Used for all bot interactions, messaging, and command handling.
     - Requires `TELEGRAM_BOT_TOKEN` environment variable.
+
+## Deployment (Koyeb)
+- **Docker Support**: Project includes `Dockerfile` and `requirements.txt` for containerized deployment
+- **Health Check**: Endpoint at `/health` for liveness monitoring
+- **Self-Ping**: Bot pings itself every 5 minutes to prevent sleeping
+- **Port**: Configurable via `PORT` environment variable (default: 8000)
+- **Files**:
+    - `Dockerfile`: Docker image configuration
+    - `requirements.txt`: Python dependencies for Docker
+    - `.dockerignore`: Files excluded from Docker build
+    - `DEPLOY_KOYEB.md`: Step-by-step deployment guide
