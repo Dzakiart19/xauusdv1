@@ -46,7 +46,18 @@ class HealthServer:
         memory_mb = 0
         try:
             import resource
-            memory_mb = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1)
+            usage = resource.getrusage(resource.RUSAGE_SELF)
+            memory_mb = round(usage.ru_maxrss / 1024, 1)
+        except ImportError:
+            try:
+                import os
+                with open('/proc/self/status', 'r') as f:
+                    for line in f:
+                        if line.startswith('VmRSS:'):
+                            memory_mb = round(int(line.split()[1]) / 1024, 1)
+                            break
+            except:
+                pass
         except:
             pass
         
@@ -59,7 +70,7 @@ class HealthServer:
             "memory_mb": memory_mb,
             "websocket": {
                 "connected": deriv_ws.connected if deriv_ws else False,
-                "current_price": deriv_ws.get_current_price() if deriv_ws else None,
+                "current_price": deriv_ws.get_current_price() if deriv_ws and deriv_ws.connected else None,
                 "tick_age_seconds": tick_age,
                 **ws_stats
             },

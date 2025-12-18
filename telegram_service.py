@@ -400,11 +400,21 @@ class TelegramService:
             )
     
     async def send_to_all_subscribers(self, bot, text, photo_path=None):
-        async def send_to_one(chat_id):
+        import asyncio
+        
+        photo_bytes = None
+        if photo_path and os.path.exists(photo_path):
             try:
-                if photo_path and os.path.exists(photo_path):
-                    with open(photo_path, 'rb') as photo_file:
-                        await bot.send_photo(chat_id=chat_id, photo=photo_file, caption=text, parse_mode='Markdown')
+                with open(photo_path, 'rb') as f:
+                    photo_bytes = f.read()
+            except Exception as e:
+                logger.error(f"Failed to read photo {photo_path}: {e}")
+        
+        async def send_to_one(chat_id, photo_data):
+            try:
+                if photo_data:
+                    import io
+                    await bot.send_photo(chat_id=chat_id, photo=io.BytesIO(photo_data), caption=text, parse_mode='Markdown')
                 else:
                     await bot.send_message(chat_id=chat_id, text=text, parse_mode='Markdown')
                 return (chat_id, True, None)
@@ -412,7 +422,6 @@ class TelegramService:
                 logger.error(f"Failed to send to {chat_id}: {e}")
                 return (chat_id, False, str(e))
         
-        import asyncio
         subscribers_list = list(self.state_manager.subscribers.copy())
         
         if not subscribers_list:
@@ -421,7 +430,7 @@ class TelegramService:
         batch_size = 20
         for i in range(0, len(subscribers_list), batch_size):
             batch = subscribers_list[i:i+batch_size]
-            results = await asyncio.gather(*[send_to_one(cid) for cid in batch], return_exceptions=True)
+            results = await asyncio.gather(*[send_to_one(cid, photo_bytes) for cid in batch], return_exceptions=True)
             
             for result in results:
                 if isinstance(result, tuple):
