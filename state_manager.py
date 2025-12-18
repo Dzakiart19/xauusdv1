@@ -44,8 +44,11 @@ class StateManager:
                         trade['start_time_utc'] = trade['start_time_utc'].isoformat()
                     state_copy['active_trade'] = trade
                 states_to_save[chat_id] = state_copy
-            with open(BotConfig.USER_STATES_FILENAME, 'w') as f:
+            
+            temp_file = f"{BotConfig.USER_STATES_FILENAME}.tmp"
+            with open(temp_file, 'w') as f:
                 json.dump(states_to_save, f, indent=2)
+            os.replace(temp_file, BotConfig.USER_STATES_FILENAME)
         except Exception as e:
             logger.error(f"Failed to save user states: {e}")
     
@@ -68,8 +71,13 @@ class StateManager:
             logger.error(f"Failed to load user states: {e}")
     
     def save_subscribers(self):
-        with open(BotConfig.SUBSCRIBERS_FILENAME, 'w') as f:
-            json.dump(list(self.subscribers), f)
+        try:
+            temp_file = f"{BotConfig.SUBSCRIBERS_FILENAME}.tmp"
+            with open(temp_file, 'w') as f:
+                json.dump(list(self.subscribers), f)
+            os.replace(temp_file, BotConfig.SUBSCRIBERS_FILENAME)
+        except Exception as e:
+            logger.error(f"Failed to save subscribers: {e}")
     
     def load_subscribers(self):
         try:

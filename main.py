@@ -32,7 +32,8 @@ async def main():
     
     health_server = HealthServer(
         state_manager,
-        lambda: signal_engine.get_deriv_ws()
+        lambda: signal_engine.get_deriv_ws(),
+        lambda: signal_engine
     )
     await health_server.start()
     
@@ -75,11 +76,12 @@ async def main():
 
 if __name__ == '__main__':
     print("""
-🏆 XAU/USD Signal Bot V1.2 - Modular Edition
+🏆 XAU/USD Signal Bot V1.3 - Enhanced Edition
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🌐 Menggunakan Deriv WebSocket
-🔄 Mode: 24 Jam Non-Stop
-📡 Tracking: Aktif saat ada posisi
+🔄 Mode: 24 Jam Non-Stop + Unlimited Signals
+📡 Tracking: Multi-Indicator Consensus
+📊 Indicators: Stoch, ADX, EMA, RSI, MACD, BBands
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     """)
     try:

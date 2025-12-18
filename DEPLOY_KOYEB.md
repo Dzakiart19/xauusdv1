@@ -1,12 +1,14 @@
-# Deploy ke Koyeb Free Tier - Optimized
+# Deploy XAU/USD Signal Bot V1.3 ke Koyeb Free Tier
 
-## 🚀 Optimisasi untuk Performance & 24/7 Uptime
+## Overview
+Bot trading signal XAU/USD yang sudah dioptimasi untuk Koyeb free tier dengan fitur unlimited signals dan multi-indicator consensus.
 
-Bot sekarang dioptimasi khusus untuk Koyeb tier gratis:
-- ✅ **Disabled chart generation** (mengurangi memory 70%)
-- ✅ **Increased analysis interval** (30s → reduce CPU)
-- ✅ **Optimized keep-alive** (mencegah idle sleep)
-- ✅ **Lightweight Docker image** (python:3.11-slim)
+## Optimisasi untuk Free Tier (512MB RAM)
+- **Chart generation disabled** - Menghemat ~70% RAM
+- **Parallel message broadcast** - Lebih cepat untuk banyak subscriber
+- **Atomic file writes** - Mencegah data corrupt saat crash
+- **Configurable signal cooldown** - Mencegah spam signal
+- **Keep-alive mechanism** - Mencegah bot sleep
 
 ## Langkah Deploy
 
@@ -14,7 +16,7 @@ Bot sekarang dioptimasi khusus untuk Koyeb tier gratis:
 ```bash
 git init
 git add .
-git commit -m "Optimized for Koyeb tier gratis"
+git commit -m "XAU/USD Signal Bot V1.3"
 git remote add origin https://github.com/USERNAME/REPO.git
 git push -u origin main
 ```
@@ -29,60 +31,144 @@ git push -u origin main
    - **Builder**: Docker
    - **Dockerfile location**: `Dockerfile`
    - **Port**: `8000`
-   - **Instance type**: Free (nano) ⭐
+   - **Instance type**: Free (nano)
    - **Regions**: Pilih terdekat
 
-### 3. Environment Variables (WAJIB)
+### 3. Environment Variables
 
-Tambahkan di Koyeb Dashboard → Settings → Environment:
+**WAJIB:**
 ```
-TELEGRAM_BOT_TOKEN = your_token_here
+TELEGRAM_BOT_TOKEN = your_bot_token_from_botfather
+```
+
+**OPSIONAL (dengan default optimasi free tier):**
+```
 PORT = 8000
 GENERATE_CHARTS = false
-KEEP_ALIVE_INTERVAL = 300
+KEEP_ALIVE_INTERVAL = 240
+UNLIMITED_SIGNALS = true
 ```
 
-⚠️ **PENTING**: `GENERATE_CHARTS=false` WAJIB untuk tier gratis!
+### 4. Health Check Configuration
 
-### 4. Health Check (Already Configured)
-
-Koyeb otomatis menggunakan:
+Koyeb akan otomatis menggunakan:
 - Path: `/health`
 - Port: `8000`
 - Interval: 30 detik
 - Retries: 3
 
-Bot akan keep-alive setiap 5 menit dengan self-ping.
+## Health Endpoint
 
-## ⚠️ Troubleshooting
+Bot menyediakan endpoint `/health` dengan metrics lengkap:
 
-### Bot sleeping/tidak aktif
-**Solusi:**
-1. Pastikan `GENERATE_CHARTS=false` di env variables
-2. Verifikasi health endpoint aktif: `curl https://your-app.koyeb.app/health`
-3. Bot sudah ada keep-alive mechanism - tidak perlu external uptime service
+```json
+{
+  "status": "ok",
+  "version": "1.3",
+  "uptime_human": "2h 45m",
+  "subscribers": 15,
+  "memory_mb": 180.5,
+  "websocket": {
+    "connected": true,
+    "current_price": 2650.123,
+    "tick_age_seconds": 0.5,
+    "total_reconnects": 3
+  },
+  "trading": {
+    "active_signal": false,
+    "total_wins": 12,
+    "total_losses": 3,
+    "total_be": 2,
+    "win_rate": 80.0
+  },
+  "signals": {
+    "total_generated": 17,
+    "history_count": 17,
+    "cooldown_seconds": 120
+  },
+  "config": {
+    "analysis_interval": 30,
+    "charts_enabled": false,
+    "unlimited_signals": true,
+    "min_consensus": 2
+  }
+}
+```
 
-### Bot heavy/lambat
-**Sudah dioptimasi:**
-- Chart generation disabled → RAM usage ↓70%
-- Analysis interval 30s → CPU usage ↓
-- Requirements sudah lightweight
+## Fitur V1.3
 
-### Build timeout
-**Solusi:**
-- Pastikan semua file di-push ke GitHub
-- Cek internet connection GitHub
+### Unlimited Signals
+- Tidak ada batasan sinyal per hari
+- Signal dihasilkan berdasarkan analisis teknikal murni
+- Cooldown 120 detik untuk mencegah spam
 
-### Sinyal tidak terkirim
-- Cek TELEGRAM_BOT_TOKEN di Koyeb Dashboard
-- Lihat logs untuk error details
-- Pastikan bot sudah di-subscribe di Telegram
+### Multi-Indicator Consensus
+Sinyal divalidasi dengan multiple indicator:
+- **Stochastic Oscillator** - Crossover detection
+- **ADX** - Trend strength filter (>15)
+- **EMA 21** - Short-term trend
+- **EMA 50** - Medium-term trend
+- **RSI 14** - Overbought/oversold filter
+- **MACD** - Momentum confirmation
+- **Bollinger Bands** - Volatility context
 
-## 🔧 Jika Ingin Enable Chart Lagi (untuk upgrade plan)
+### Signal History
+- Tracking 100 sinyal terakhir
+- Performance metrics per signal
+- Win rate calculation otomatis
 
-Set di Koyeb Environment:
+## Troubleshooting
+
+### Bot Sleeping/Tidak Aktif
+1. Pastikan `GENERATE_CHARTS=false`
+2. Verifikasi health endpoint: `curl https://your-app.koyeb.app/health`
+3. Cek `KEEP_ALIVE_INTERVAL` di environment variables
+
+### Out of Memory (OOM)
+1. Pastikan `GENERATE_CHARTS=false`
+2. Cek jumlah subscriber - broadcast besar butuh lebih banyak memory
+3. Pertimbangkan menaikkan `ANALYSIS_INTERVAL`
+
+### WebSocket Disconnects
+- Normal behavior - bot punya auto-reconnection
+- Cek `/health` untuk `total_reconnects` metric
+- Deriv API mungkin ada maintenance
+
+### Sinyal Tidak Tergenerate
+1. Cek market buka (Sen-Jum, bukan weekend)
+2. Verifikasi WebSocket connected via `/health`
+3. Review logs untuk nilai indikator
+4. Pastikan `MIN_INDICATOR_CONSENSUS` tercapai (default: 2)
+
+## Bot Commands
+
+Users dapat berinteraksi via Telegram:
+
+| Command | Fungsi |
+|---------|--------|
+| `/start` | Tampilkan menu utama |
+| `/subscribe` | Berlangganan sinyal |
+| `/unsubscribe` | Berhenti berlangganan |
+| `/dashboard` | Lihat posisi aktif dan stats |
+| `/signal` | Lihat sinyal terakhir |
+| `/stats` | Statistik trading personal |
+| `/riset` | Reset statistik personal |
+| `/info` | Info sistem bot |
+
+## Upgrade ke Paid Plan
+
+Jika upgrade ke paid plan Koyeb, Anda bisa enable fitur tambahan:
+
 ```
 GENERATE_CHARTS = true
+ANALYSIS_INTERVAL = 15
 ```
 
-Tapi ini akan membuat bot lebih berat. Rekomendasinya tetap `false` untuk tier gratis.
+Ini akan mengaktifkan chart generation dan analisis lebih cepat.
+
+## Support
+
+Jika ada masalah:
+1. Cek `/health` endpoint untuk diagnostics
+2. Review container logs di Koyeb dashboard
+3. Pastikan semua environment variables sudah benar

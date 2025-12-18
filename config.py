@@ -36,7 +36,8 @@ class BotConfig:
     
     UNLIMITED_SIGNALS = True
     MULTI_TIMEFRAME_ENABLED = True
-    MIN_INDICATOR_CONSENSUS = 3
+    MIN_INDICATOR_CONSENSUS = 2
+    SIGNAL_COOLDOWN_SECONDS = 120
     
     CHART_FILENAME = 'chart_v1.2.png'
     USER_STATES_FILENAME = 'user_states.json'

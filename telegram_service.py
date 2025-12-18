@@ -400,17 +400,38 @@ class TelegramService:
             )
     
     async def send_to_all_subscribers(self, bot, text, photo_path=None):
-        for chat_id in self.state_manager.subscribers.copy():
+        async def send_to_one(chat_id):
             try:
                 if photo_path and os.path.exists(photo_path):
                     with open(photo_path, 'rb') as photo_file:
                         await bot.send_photo(chat_id=chat_id, photo=photo_file, caption=text, parse_mode='Markdown')
                 else:
                     await bot.send_message(chat_id=chat_id, text=text, parse_mode='Markdown')
+                return (chat_id, True, None)
             except TelegramError as e:
                 logger.error(f"Failed to send to {chat_id}: {e}")
-                if "blocked" in str(e).lower() or "not found" in str(e).lower():
-                    self.state_manager.remove_subscriber(chat_id)
+                return (chat_id, False, str(e))
+        
+        import asyncio
+        subscribers_list = list(self.state_manager.subscribers.copy())
+        
+        if not subscribers_list:
+            return
+        
+        batch_size = 20
+        for i in range(0, len(subscribers_list), batch_size):
+            batch = subscribers_list[i:i+batch_size]
+            results = await asyncio.gather(*[send_to_one(cid) for cid in batch], return_exceptions=True)
+            
+            for result in results:
+                if isinstance(result, tuple):
+                    chat_id, success, error = result
+                    if not success and error:
+                        if "blocked" in error.lower() or "not found" in error.lower():
+                            self.state_manager.remove_subscriber(chat_id)
+            
+            if i + batch_size < len(subscribers_list):
+                await asyncio.sleep(0.5)
     
     async def send_tracking_update(self, bot, current_price, signal_info):
         if not signal_info:

@@ -24,7 +24,7 @@ class SignalEngine:
         self.last_candle_fetch: Optional[datetime.datetime] = None
         self.signal_history: list = []
         self.last_signal_time: Optional[datetime.datetime] = None
-        self.signal_cooldown_seconds = 120
+        self.signal_cooldown_seconds = BotConfig.SIGNAL_COOLDOWN_SECONDS
         self.total_signals_generated = 0
     
     def _has_telegram_service(self) -> bool:
