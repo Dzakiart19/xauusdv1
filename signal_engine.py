@@ -4,26 +4,63 @@ import random
 import os
 import pandas as pd
 import logging
+from typing import Optional, TYPE_CHECKING
 
 from config import BotConfig
 from utils import calculate_indicators, generate_chart, bot_logger
 from deriv_ws import DerivWebSocket, find_gold_symbol
 
+if TYPE_CHECKING:
+    from telegram_service import TelegramService
+
 
 class SignalEngine:
-    def __init__(self, state_manager, telegram_service=None):
+    def __init__(self, state_manager, telegram_service: Optional['TelegramService'] = None):
         self.state_manager = state_manager
-        self.telegram_service = telegram_service
-        self.deriv_ws = None
+        self.telegram_service: Optional['TelegramService'] = telegram_service
+        self.deriv_ws: Optional[DerivWebSocket] = None
         self.gold_symbol = "frxXAUUSD"
-        self.cached_candles_df = None
-        self.last_candle_fetch = None
-        self.signal_history = []
-        self.last_signal_cooldown = None
+        self.cached_candles_df: Optional[pd.DataFrame] = None
+        self.last_candle_fetch: Optional[datetime.datetime] = None
+        self.signal_history: list = []
+        self.last_signal_time: Optional[datetime.datetime] = None
+        self.signal_cooldown_seconds = 120
+        self.total_signals_generated = 0
     
-    def _has_telegram_service(self):
+    def _has_telegram_service(self) -> bool:
         """Check if telegram service is available"""
         return self.telegram_service is not None
+    
+    def _can_generate_signal(self) -> bool:
+        """Check if enough time has passed since last signal (spam protection)"""
+        if self.last_signal_time is None:
+            return True
+        
+        now = datetime.datetime.now(datetime.timezone.utc)
+        elapsed = (now - self.last_signal_time).total_seconds()
+        return elapsed >= self.signal_cooldown_seconds
+    
+    def _record_signal(self, signal_info: dict) -> None:
+        """Record signal in history for tracking"""
+        self.last_signal_time = datetime.datetime.now(datetime.timezone.utc)
+        self.total_signals_generated += 1
+        
+        history_entry = {
+            'id': self.total_signals_generated,
+            'direction': signal_info.get('direction'),
+            'entry_price': signal_info.get('entry_price'),
+            'tp1': signal_info.get('tp1_level'),
+            'tp2': signal_info.get('tp2_level'),
+            'sl': signal_info.get('sl_level'),
+            'timestamp': self.last_signal_time.isoformat(),
+            'result': 'PENDING'
+        }
+        
+        self.signal_history.append(history_entry)
+        if len(self.signal_history) > 100:
+            self.signal_history = self.signal_history[-100:]
+        
+        bot_logger.info(f"📝 Signal #{self.total_signals_generated} recorded")
     
     def get_deriv_ws(self):
         return self.deriv_ws
@@ -363,11 +400,19 @@ class SignalEngine:
                     
                     bot_logger.info(f"📊 Analysis: Stoch={is_stoch_buy}/{is_stoch_sell}, ADX={adx_value:.1f}, RSI={rsi_value:.1f}, BuyCon={buy_confirmations:.1f}, SellCon={sell_confirmations:.1f}")
                     
+                    min_consensus = BotConfig.MIN_INDICATOR_CONSENSUS
+                    
                     final_signal = None
-                    if buy_confirmations >= 2.0:
+                    if buy_confirmations >= min_consensus:
                         final_signal = 'BUY'
-                    elif sell_confirmations >= 2.0:
+                    elif sell_confirmations >= min_consensus:
                         final_signal = 'SELL'
+                    
+                    if final_signal and not self._can_generate_signal():
+                        if self.last_signal_time is not None:
+                            cooldown_left = self.signal_cooldown_seconds - (datetime.datetime.now(datetime.timezone.utc) - self.last_signal_time).total_seconds()
+                            bot_logger.info(f"⏳ Signal {final_signal} detected but in cooldown ({cooldown_left:.0f}s left)")
+                        final_signal = None
                     
                     if final_signal:
                         bot_logger.info(f"🎯 Sinyal {final_signal} valid ditemukan!")
@@ -437,6 +482,7 @@ class SignalEngine:
                                 photo_sent = True
                             
                             if photo_sent:
+                                self._record_signal(temp_trade_info)
                                 self.state_manager.update_current_signal(temp_trade_info)
                                 self.state_manager.set_active_trade_for_subscribers(temp_trade_info)
                                 

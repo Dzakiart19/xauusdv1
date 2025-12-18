@@ -319,7 +319,10 @@ class TelegramService:
             return
         await query.answer()
         
-        chat_id = str(query.message.chat_id)
+        try:
+            chat_id = str(query.message.chat.id)
+        except (AttributeError, TypeError):
+            return
         
         if query.data == "subscribe":
             if self.state_manager.is_subscriber(chat_id):
