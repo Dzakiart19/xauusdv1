@@ -1,13 +1,30 @@
-# Deploy XAU/USD Signal Bot V1.3 ke Koyeb Free Tier
+# Deploy XAU/USD Scalping Signal Bot V2.0 ke Koyeb Free Tier
 
 ## Overview
-Bot trading signal XAU/USD yang sudah dioptimasi untuk Koyeb free tier dengan fitur unlimited signals dan multi-indicator consensus.
+Bot trading signal XAU/USD yang sudah dioptimasi untuk Koyeb free tier dengan fitur unlimited signals dan strategi scalping (EMA50 + RSI3 + ADX55).
+
+## Strategi Scalping V2.0
+
+### Indikator yang Digunakan:
+- **EMA 50**: Filter arah tren (harga > EMA50 = BUY, harga < EMA50 = SELL)
+- **RSI 3**: Timing entry (< 30 = oversold → BUY, > 70 = overbought → SELL)
+- **ADX 55**: Filter kekuatan tren (harus > 30 untuk entry)
+
+### Kondisi Entry:
+| Signal | EMA50 | RSI(3) | ADX(55) |
+|--------|-------|--------|---------|
+| BUY | Harga > EMA50 | < 30 (Oversold) | > 30 |
+| SELL | Harga < EMA50 | > 70 (Overbought) | > 30 |
+
+### Money Management:
+- **Stop Loss:** $3 dari entry (fixed)
+- **Take Profit 1:** $3 dari entry (1:1 ratio)
+- **Take Profit 2:** $4.50 dari entry (1.5:1 ratio)
 
 ## Optimisasi untuk Free Tier (512MB RAM)
 - **Chart generation disabled** - Menghemat ~70% RAM
-- **Parallel message broadcast** - Lebih cepat untuk banyak subscriber
-- **Atomic file writes** - Mencegah data corrupt saat crash
-- **Configurable signal cooldown** - Mencegah spam signal
+- **Simplified indicators** - Hanya 4 indikator (vs 7 di V1.3)
+- **Fixed SL/TP** - Tidak perlu kalkulasi ATR setiap saat
 - **Keep-alive mechanism** - Mencegah bot sleep
 
 ## Langkah Deploy
@@ -16,7 +33,7 @@ Bot trading signal XAU/USD yang sudah dioptimasi untuk Koyeb free tier dengan fi
 ```bash
 git init
 git add .
-git commit -m "XAU/USD Signal Bot V1.3"
+git commit -m "XAU/USD Scalping Bot V2.0"
 git remote add origin https://github.com/USERNAME/REPO.git
 git push -u origin main
 ```
@@ -45,8 +62,7 @@ TELEGRAM_BOT_TOKEN = your_bot_token_from_botfather
 ```
 PORT = 8000
 GENERATE_CHARTS = false
-KEEP_ALIVE_INTERVAL = 240
-UNLIMITED_SIGNALS = true
+KEEP_ALIVE_INTERVAL = 300
 ```
 
 ### 4. Health Check Configuration
@@ -64,10 +80,10 @@ Bot menyediakan endpoint `/health` dengan metrics lengkap:
 ```json
 {
   "status": "ok",
-  "version": "1.3",
+  "version": "2.0-scalping",
   "uptime_human": "2h 45m",
   "subscribers": 15,
-  "memory_mb": 180.5,
+  "memory_mb": 150.5,
   "websocket": {
     "connected": true,
     "current_price": 2650.123,
@@ -86,36 +102,33 @@ Bot menyediakan endpoint `/health` dengan metrics lengkap:
     "history_count": 17,
     "cooldown_seconds": 120
   },
-  "config": {
-    "analysis_interval": 30,
-    "charts_enabled": false,
-    "unlimited_signals": true,
-    "min_consensus": 2
+  "strategy": {
+    "type": "scalping",
+    "indicators": ["EMA50", "RSI3", "ADX55"],
+    "sl_usd": 3.0,
+    "tp_usd": 3.0
   }
 }
 ```
 
-## Fitur V1.3
+## Fitur V2.0
 
 ### Unlimited Signals
 - Tidak ada batasan sinyal per hari
-- Signal dihasilkan berdasarkan analisis teknikal murni
+- Signal dihasilkan berdasarkan strategi scalping
 - Cooldown 120 detik untuk mencegah spam
 
-### Multi-Indicator Consensus
-Sinyal divalidasi dengan multiple indicator:
-- **Stochastic Oscillator** - Crossover detection
-- **ADX** - Trend strength filter (>15)
-- **EMA 21** - Short-term trend
-- **EMA 50** - Medium-term trend
-- **RSI 14** - Overbought/oversold filter
-- **MACD** - Momentum confirmation
-- **Bollinger Bands** - Volatility context
+### Scalping Strategy (EMA50 + RSI3 + ADX55)
+Sinyal divalidasi dengan 3 kondisi:
+1. **EMA 50** - Trend direction filter
+2. **RSI 3** - Entry timing (oversold/overbought)
+3. **ADX 55** - Trend strength filter (> 30)
 
-### Signal History
-- Tracking 100 sinyal terakhir
-- Performance metrics per signal
-- Win rate calculation otomatis
+### Money Management
+- Fixed Stop Loss: $3
+- Fixed Take Profit: $3 (1:1 ratio)
+- TP2: $4.50 (1.5:1 ratio)
+- Risk per trade: $3
 
 ## Troubleshooting
 
@@ -127,7 +140,6 @@ Sinyal divalidasi dengan multiple indicator:
 ### Out of Memory (OOM)
 1. Pastikan `GENERATE_CHARTS=false`
 2. Cek jumlah subscriber - broadcast besar butuh lebih banyak memory
-3. Pertimbangkan menaikkan `ANALYSIS_INTERVAL`
 
 ### WebSocket Disconnects
 - Normal behavior - bot punya auto-reconnection
@@ -137,8 +149,8 @@ Sinyal divalidasi dengan multiple indicator:
 ### Sinyal Tidak Tergenerate
 1. Cek market buka (Sen-Jum, bukan weekend)
 2. Verifikasi WebSocket connected via `/health`
-3. Review logs untuk nilai indikator
-4. Pastikan `MIN_INDICATOR_CONSENSUS` tercapai (default: 2)
+3. Pastikan ADX > 30 (tren cukup kuat)
+4. RSI harus < 30 (untuk BUY) atau > 70 (untuk SELL)
 
 ## Bot Commands
 

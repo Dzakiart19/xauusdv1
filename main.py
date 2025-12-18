@@ -76,12 +76,12 @@ async def main():
 
 if __name__ == '__main__':
     print("""
-🏆 XAU/USD Signal Bot V1.3 - Enhanced Edition
+🏆 XAU/USD Scalping Signal Bot V2.0
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🌐 Menggunakan Deriv WebSocket
 🔄 Mode: 24 Jam Non-Stop + Unlimited Signals
-📡 Tracking: Multi-Indicator Consensus
-📊 Indicators: Stoch, ADX, EMA, RSI, MACD, BBands
+📡 Strategi: EMA50 + RSI(3) + ADX(55)
+💰 Money Management: SL $3 | TP $3 (1:1 Ratio)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     """)
     try:

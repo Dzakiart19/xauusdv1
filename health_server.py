@@ -63,7 +63,7 @@ class HealthServer:
         
         return web.json_response({
             "status": "ok",
-            "version": "1.3",
+            "version": "2.0-scalping",
             "uptime_seconds": round(uptime, 0),
             "uptime_human": self._format_uptime(uptime),
             "subscribers": len(self.state_manager.subscribers),
@@ -82,11 +82,17 @@ class HealthServer:
                 "win_rate": trade_stats.get('win_rate', 0),
             },
             "signals": signal_stats,
+            "strategy": {
+                "type": "scalping",
+                "indicators": ["EMA50", "RSI3", "ADX55"],
+                "sl_usd": BotConfig.FIXED_SL_USD,
+                "tp_usd": BotConfig.FIXED_TP_USD,
+                "adx_threshold": BotConfig.ADX_FILTER_THRESHOLD,
+            },
             "config": {
                 "analysis_interval": BotConfig.ANALYSIS_INTERVAL,
                 "charts_enabled": BotConfig.GENERATE_CHARTS,
                 "unlimited_signals": BotConfig.UNLIMITED_SIGNALS,
-                "min_consensus": BotConfig.MIN_INDICATOR_CONSENSUS,
             }
         })
     
