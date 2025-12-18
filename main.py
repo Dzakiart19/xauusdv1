@@ -8,13 +8,12 @@ import pandas_ta as ta
 import pytz
 import mplfinance as mpf
 
-from telegram import Bot
+from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import TelegramError
-from telegram.ext import Application, CommandHandler
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from deriv_ws import DerivWebSocket, find_gold_symbol
 
 TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', 'YOUR_BOT_TOKEN')
-TARGET_CHAT_ID = os.environ.get('TARGET_CHAT_ID', 'YOUR_CHAT_ID')
 
 STOCH_K = 8
 STOCH_D = 3
@@ -35,9 +34,13 @@ loss_count = 0
 be_count = 0
 deriv_ws = None
 gold_symbol = None
+subscribers = set()
+dashboard_messages = {}
+tracking_message_ids = {}
 
 CHART_FILENAME = 'chart_v31.png'
 STATE_FILENAME = 'bot_state_v31.json'
+SUBSCRIBERS_FILENAME = 'subscribers.json'
 LOG_FILENAME = 'bot_v31.log'
 wib_tz = pytz.timezone('Asia/Jakarta')
 
@@ -80,43 +83,229 @@ def load_state():
     except Exception as e:
         bot_logger.error(f"Gagal memuat state: {e}")
 
-async def start(update, context):
-    if str(update.message.chat_id) == TARGET_CHAT_ID:
+def save_subscribers():
+    with open(SUBSCRIBERS_FILENAME, 'w') as f:
+        json.dump(list(subscribers), f)
+
+def load_subscribers():
+    global subscribers
+    try:
+        if os.path.exists(SUBSCRIBERS_FILENAME):
+            with open(SUBSCRIBERS_FILENAME, 'r') as f:
+                subscribers = set(json.load(f))
+            bot_logger.info(f"Loaded {len(subscribers)} subscribers")
+    except Exception as e:
+        bot_logger.error(f"Failed to load subscribers: {e}")
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = str(update.message.chat_id)
+    
+    keyboard = [
+        [InlineKeyboardButton("Subscribe", callback_data="subscribe"),
+         InlineKeyboardButton("Unsubscribe", callback_data="unsubscribe")],
+        [InlineKeyboardButton("Dashboard", callback_data="dashboard"),
+         InlineKeyboardButton("Stats", callback_data="stats")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    subscribed = chat_id in subscribers
+    status = "AKTIF" if subscribed else "TIDAK AKTIF"
+    
+    await update.message.reply_text(
+        f"*Bot Sinyal XAU/USD V31 - Public Edition*\n\n"
+        f"Data dari Deriv WebSocket (tanpa API key)\n\n"
+        f"Status Langganan Anda: *{status}*\n\n"
+        f"*Perintah:*\n"
+        f"/subscribe - Berlangganan sinyal\n"
+        f"/unsubscribe - Berhenti berlangganan\n"
+        f"/dashboard - Lihat dashboard real-time\n"
+        f"/stats - Lihat statistik trading\n"
+        f"/info - Info sistem",
+        parse_mode='Markdown',
+        reply_markup=reply_markup
+    )
+
+async def subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = str(update.message.chat_id)
+    
+    if chat_id in subscribers:
         await update.message.reply_text(
-            "Bot Sinyal V31 (Deriv Edition) aktif!\n\n"
-            "Data dari Deriv WebSocket (tanpa API key)\n"
-            "/stats untuk melihat performa\n"
-            "/info untuk info sistem",
+            "Anda sudah berlangganan sinyal trading!",
+            parse_mode='Markdown'
+        )
+    else:
+        subscribers.add(chat_id)
+        save_subscribers()
+        await update.message.reply_text(
+            "*Berhasil berlangganan!*\n\n"
+            "Anda akan menerima sinyal trading XAU/USD secara real-time.\n"
+            "Gunakan /dashboard untuk memantau posisi aktif.",
+            parse_mode='Markdown'
+        )
+        bot_logger.info(f"New subscriber: {chat_id}")
+
+async def unsubscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = str(update.message.chat_id)
+    
+    if chat_id in subscribers:
+        subscribers.discard(chat_id)
+        save_subscribers()
+        await update.message.reply_text(
+            "Anda telah berhenti berlangganan.\n"
+            "Gunakan /subscribe untuk berlangganan kembali.",
+            parse_mode='Markdown'
+        )
+        bot_logger.info(f"Unsubscribed: {chat_id}")
+    else:
+        await update.message.reply_text(
+            "Anda belum berlangganan.",
             parse_mode='Markdown'
         )
 
-async def stats(update, context):
-    if str(update.message.chat_id) == TARGET_CHAT_ID:
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    total = win_count + loss_count + be_count
+    win_rate = (win_count / (win_count + loss_count)) * 100 if (win_count + loss_count) > 0 else 0.0
+    
+    await update.message.reply_text(
+        f"*Statistik Trading XAU/USD*\n\n"
+        f"Total Trade: *{total}*\n"
+        f"Menang: *{win_count}*\n"
+        f"Kalah: *{loss_count}*\n"
+        f"BE: *{be_count}*\n\n"
+        f"Win Rate (W vs L): *{win_rate:.2f}%*",
+        parse_mode='Markdown'
+    )
+
+async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    status = "Terhubung" if (deriv_ws and deriv_ws.connected) else "Terputus"
+    current_price = deriv_ws.get_current_price() if deriv_ws else None
+    price_str = f"${current_price:.3f}" if current_price else "N/A"
+    subscriber_count = len(subscribers)
+    
+    await update.message.reply_text(
+        f"*Info Sistem*\n\n"
+        f"WebSocket: {status}\n"
+        f"Symbol: {gold_symbol or 'N/A'}\n"
+        f"Harga Terakhir: {price_str}\n"
+        f"Total Subscriber: {subscriber_count}\n"
+        f"Data Source: Deriv (No API Key)\n"
+        f"Interval: 1 menit",
+        parse_mode='Markdown'
+    )
+
+async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await send_dashboard(update.message.chat_id, context.bot)
+
+async def send_dashboard(chat_id, bot):
+    status = "Terhubung" if (deriv_ws and deriv_ws.connected) else "Terputus"
+    current_price = deriv_ws.get_current_price() if deriv_ws else None
+    price_str = f"${current_price:.3f}" if current_price else "N/A"
+    
+    now = datetime.datetime.now(wib_tz)
+    
+    dashboard_text = (
+        f"*DASHBOARD XAU/USD*\n"
+        f"_{now.strftime('%H:%M:%S WIB')}_\n\n"
+        f"*Status Koneksi:* {status}\n"
+        f"*Harga Real-time:* {price_str}\n"
+        f"*Symbol:* {gold_symbol or 'frxXAUUSD'}\n\n"
+    )
+    
+    if active_trade:
+        direction = active_trade['direction']
+        entry = active_trade['entry_price']
+        tp1 = active_trade['tp1_level']
+        tp2 = active_trade['tp2_level']
+        sl = active_trade['sl_level']
+        trade_status = active_trade['status']
+        
+        if current_price:
+            if direction == 'BUY':
+                pnl_pips = (current_price - entry) * 10
+            else:
+                pnl_pips = (entry - current_price) * 10
+            pnl_emoji = "" if pnl_pips >= 0 else ""
+            pnl_str = f"{pnl_emoji} {pnl_pips:+.1f} pips"
+        else:
+            pnl_str = "N/A"
+        
+        status_display = "TP1 Hit - BE Mode" if trade_status == 'tp1_hit' else "Aktif"
+        
+        dashboard_text += (
+            f"*POSISI AKTIF*\n"
+            f"Arah: *{direction}*\n"
+            f"Entry: *${entry:.3f}*\n"
+            f"TP1: ${tp1:.3f}\n"
+            f"TP2: ${tp2:.3f}\n"
+            f"SL: ${sl:.3f}\n"
+            f"Status: *{status_display}*\n"
+            f"P&L: *{pnl_str}*\n\n"
+        )
+    else:
+        dashboard_text += f"*Tidak Ada Posisi Aktif*\n\n"
+    
+    total = win_count + loss_count + be_count
+    win_rate = (win_count / (win_count + loss_count)) * 100 if (win_count + loss_count) > 0 else 0.0
+    
+    dashboard_text += (
+        f"*STATISTIK*\n"
+        f"Total: {total} | W: {win_count} | L: {loss_count} | BE: {be_count}\n"
+        f"Win Rate: {win_rate:.1f}%"
+    )
+    
+    keyboard = [[InlineKeyboardButton("Refresh", callback_data="dashboard")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    try:
+        await bot.send_message(
+            chat_id=chat_id,
+            text=dashboard_text,
+            parse_mode='Markdown',
+            reply_markup=reply_markup
+        )
+    except Exception as e:
+        bot_logger.error(f"Failed to send dashboard: {e}")
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    chat_id = str(query.message.chat_id)
+    
+    if query.data == "subscribe":
+        if chat_id in subscribers:
+            await query.edit_message_text("Anda sudah berlangganan sinyal trading!")
+        else:
+            subscribers.add(chat_id)
+            save_subscribers()
+            await query.edit_message_text(
+                "*Berhasil berlangganan!*\n\n"
+                "Anda akan menerima sinyal trading XAU/USD secara real-time.\n"
+                "Gunakan /dashboard untuk memantau posisi aktif.",
+                parse_mode='Markdown'
+            )
+    
+    elif query.data == "unsubscribe":
+        if chat_id in subscribers:
+            subscribers.discard(chat_id)
+            save_subscribers()
+            await query.edit_message_text("Anda telah berhenti berlangganan.")
+        else:
+            await query.edit_message_text("Anda belum berlangganan.")
+    
+    elif query.data == "dashboard":
+        await send_dashboard(chat_id, context.bot)
+    
+    elif query.data == "stats":
         total = win_count + loss_count + be_count
         win_rate = (win_count / (win_count + loss_count)) * 100 if (win_count + loss_count) > 0 else 0.0
-        await update.message.reply_text(
-            f"*Statistik Keseluruhan*\n\n"
+        await query.edit_message_text(
+            f"*Statistik Trading XAU/USD*\n\n"
             f"Total Trade: *{total}*\n"
             f"Menang: *{win_count}*\n"
             f"Kalah: *{loss_count}*\n"
             f"BE: *{be_count}*\n\n"
-            f"Win Rate (W vs L): *{win_rate:.2f}%*",
-            parse_mode='Markdown'
-        )
-
-async def info(update, context):
-    if str(update.message.chat_id) == TARGET_CHAT_ID:
-        status = "Terhubung" if (deriv_ws and deriv_ws.connected) else "Terputus"
-        current_price = deriv_ws.get_current_price() if deriv_ws else None
-        price_str = f"${current_price:.3f}" if current_price else "N/A"
-        
-        await update.message.reply_text(
-            f"*Info Sistem*\n\n"
-            f"WebSocket: {status}\n"
-            f"Symbol: {gold_symbol or 'N/A'}\n"
-            f"Harga Terakhir: {price_str}\n"
-            f"Data Source: Deriv (No API Key)\n"
-            f"Interval: 1 menit",
+            f"Win Rate: *{win_rate:.2f}%*",
             parse_mode='Markdown'
         )
 
@@ -169,16 +358,91 @@ def calculate_indicators(df):
     df.ta.ema(length=MA_SHORT_PERIOD, append=True)
     return df
 
+async def send_to_all_subscribers(bot, text, photo_path=None):
+    for chat_id in subscribers.copy():
+        try:
+            if photo_path and os.path.exists(photo_path):
+                with open(photo_path, 'rb') as photo_file:
+                    await bot.send_photo(chat_id=chat_id, photo=photo_file, caption=text, parse_mode='Markdown')
+            else:
+                await bot.send_message(chat_id=chat_id, text=text, parse_mode='Markdown')
+        except TelegramError as e:
+            bot_logger.error(f"Failed to send to {chat_id}: {e}")
+            if "blocked" in str(e).lower() or "not found" in str(e).lower():
+                subscribers.discard(chat_id)
+                save_subscribers()
+
+async def send_tracking_update(bot, current_price):
+    global tracking_message_ids
+    
+    if not active_trade:
+        return
+    
+    direction = active_trade['direction']
+    entry = active_trade['entry_price']
+    tp1 = active_trade['tp1_level']
+    tp2 = active_trade['tp2_level']
+    sl = active_trade['sl_level']
+    trade_status = active_trade['status']
+    
+    if direction == 'BUY':
+        pnl_pips = (current_price - entry) * 10
+        distance_tp1 = tp1 - current_price
+        distance_tp2 = tp2 - current_price
+        distance_sl = current_price - sl
+    else:
+        pnl_pips = (entry - current_price) * 10
+        distance_tp1 = current_price - tp1
+        distance_tp2 = current_price - tp2
+        distance_sl = sl - current_price
+    
+    pnl_emoji = "" if pnl_pips >= 0 else ""
+    status_display = "BE Mode" if trade_status == 'tp1_hit' else "Tracking"
+    
+    now = datetime.datetime.now(wib_tz)
+    
+    update_text = (
+        f"*LIVE TRACKING XAU/USD*\n"
+        f"_{now.strftime('%H:%M:%S WIB')}_\n\n"
+        f"*{direction}* @ ${entry:.3f}\n"
+        f"*Harga Sekarang:* ${current_price:.3f}\n\n"
+        f"{pnl_emoji} P&L: *{pnl_pips:+.1f} pips*\n"
+        f"Status: *{status_display}*\n\n"
+        f"Jarak ke TP1: {distance_tp1:.3f}\n"
+        f"Jarak ke TP2: {distance_tp2:.3f}\n"
+        f"Jarak ke SL: {distance_sl:.3f}"
+    )
+    
+    for chat_id in subscribers.copy():
+        try:
+            if chat_id in tracking_message_ids:
+                try:
+                    await bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=tracking_message_ids[chat_id],
+                        text=update_text,
+                        parse_mode='Markdown'
+                    )
+                except TelegramError as edit_error:
+                    if "message is not modified" not in str(edit_error).lower():
+                        msg = await bot.send_message(chat_id=chat_id, text=update_text, parse_mode='Markdown')
+                        tracking_message_ids[chat_id] = msg.message_id
+            else:
+                msg = await bot.send_message(chat_id=chat_id, text=update_text, parse_mode='Markdown')
+                tracking_message_ids[chat_id] = msg.message_id
+        except TelegramError as e:
+            bot_logger.error(f"Tracking update failed for {chat_id}: {e}")
+
+def clear_tracking_messages():
+    global tracking_message_ids
+    tracking_message_ids = {}
+
 async def send_photo(bot, caption_text):
-    try:
-        with open(CHART_FILENAME, 'rb') as photo_file:
-            await bot.send_photo(chat_id=TARGET_CHAT_ID, photo=photo_file, caption=caption_text, parse_mode='Markdown')
-        if os.path.exists(CHART_FILENAME):
-            os.remove(CHART_FILENAME)
+    if os.path.exists(CHART_FILENAME):
+        await send_to_all_subscribers(bot, caption_text, CHART_FILENAME)
+        os.remove(CHART_FILENAME)
         return True
-    except Exception as e:
-        bot_logger.error(f"TELEGRAM-ERROR: Gagal mengirim foto: {e}")
-        return False
+    return False
 
 async def generate_chart(df, trade_info, title):
     try:
@@ -204,20 +468,12 @@ async def signal_engine_loop(bot):
     global active_trade, win_count, loss_count, be_count, deriv_ws, gold_symbol
     
     bot_logger.info("=" * 50)
-    bot_logger.info("Bot Sinyal V31 (Deriv Edition) dimulai!")
+    bot_logger.info("Bot Sinyal V31 (Public Edition) dimulai!")
     bot_logger.info("Sumber Data: Deriv WebSocket (Tanpa API Key)")
     bot_logger.info("=" * 50)
     
-    bot_logger.info("Mencari symbol XAU/USD di Deriv...")
-    gold_symbols = await find_gold_symbol()
-    
-    if gold_symbols:
-        gold_symbol = gold_symbols[0].get('symbol')
-        display_name = gold_symbols[0].get('display_name', gold_symbol)
-        bot_logger.info(f"Symbol ditemukan: {gold_symbol} ({display_name})")
-    else:
-        bot_logger.warning("Symbol XAU/USD tidak ditemukan, menggunakan frxXAUUSD sebagai default")
-        gold_symbol = "frxXAUUSD"
+    gold_symbol = "frxXAUUSD"
+    bot_logger.info(f"Menggunakan symbol XAU/USD: {gold_symbol}")
     
     deriv_ws = DerivWebSocket()
     if not await deriv_ws.connect():
@@ -241,10 +497,16 @@ async def signal_engine_loop(bot):
     while True:
         try:
             status_str = 'Melacak' if active_trade else 'Mencari'
-            bot_logger.info(f"--- Siklus Baru | Status: {status_str} ---")
+            bot_logger.info(f"--- Siklus Baru | Status: {status_str} | Subscribers: {len(subscribers)} ---")
             
             if not deriv_ws.connected:
                 bot_logger.warning("WebSocket terputus, mencoba reconnect...")
+                if listen_task and not listen_task.done():
+                    listen_task.cancel()
+                    try:
+                        await listen_task
+                    except asyncio.CancelledError:
+                        pass
                 if await deriv_ws.connect():
                     await deriv_ws.subscribe_ticks(gold_symbol)
                     listen_task = asyncio.create_task(deriv_ws.listen())
@@ -276,6 +538,8 @@ async def signal_engine_loop(bot):
                         f"SL: {active_trade['sl_level']:.3f}"
                     )
                     
+                    await send_tracking_update(bot, current_price)
+                    
                     result_info = {}
                     trade_status = active_trade['status']
                     
@@ -302,15 +566,13 @@ async def signal_engine_loop(bot):
                     if result_info.get('type') == 'TP1_HIT':
                         active_trade['status'] = 'tp1_hit'
                         active_trade['sl_level'] = active_trade['entry_price']
-                        await bot.send_message(
-                            chat_id=TARGET_CHAT_ID,
-                            text=(
-                                f"*TP1 TERCAPAI!*\n\n"
-                                f"*Posisi:* {active_trade['direction']} @ ${active_trade['entry_price']:.3f}\n"
-                                f"*AKSI: Pindahkan SL ke harga entry!*"
-                            ),
-                            parse_mode='Markdown'
+                        
+                        tp1_text = (
+                            f"*TP1 TERCAPAI!*\n\n"
+                            f"*Posisi:* {active_trade['direction']} @ ${active_trade['entry_price']:.3f}\n"
+                            f"*AKSI: Pindahkan SL ke harga entry!*"
                         )
+                        await send_to_all_subscribers(bot, tp1_text)
                     
                     elif result_info.get('type') in ['WIN', 'LOSS', 'BREAK_EVEN']:
                         if result_info['type'] == 'WIN':
@@ -339,6 +601,7 @@ async def signal_engine_loop(bot):
                         
                         active_trade = {}
                         trade_closed = True
+                        clear_tracking_messages()
                         break
                 
                 if trade_closed:
@@ -416,7 +679,11 @@ async def signal_engine_loop(bot):
                     if await generate_chart(df, temp_trade_info, title):
                         if await send_photo(bot, caption):
                             active_trade = temp_trade_info
-                            bot_logger.info("Sinyal berhasil dikirim! Mengaktifkan mode pelacakan.")
+                            clear_tracking_messages()
+                            current_price = await get_realtime_price()
+                            if current_price:
+                                await send_tracking_update(bot, current_price)
+                            bot_logger.info("Sinyal berhasil dikirim ke semua subscriber! Mengaktifkan mode pelacakan.")
                 else:
                     bot_logger.info("Tidak ada sinyal yang valid saat ini.")
             
@@ -432,17 +699,22 @@ async def signal_engine_loop(bot):
             await asyncio.sleep(60)
 
 async def main():
-    if 'YOUR_BOT_TOKEN' in TELEGRAM_BOT_TOKEN or 'YOUR_CHAT_ID' in TARGET_CHAT_ID:
-        bot_logger.critical("Harap set TELEGRAM_BOT_TOKEN dan TARGET_CHAT_ID di environment variables!")
-        bot_logger.info("Export variables: TELEGRAM_BOT_TOKEN, TARGET_CHAT_ID")
+    if 'YOUR_BOT_TOKEN' in TELEGRAM_BOT_TOKEN:
+        bot_logger.critical("Harap set TELEGRAM_BOT_TOKEN di environment variables!")
+        bot_logger.info("Export variable: TELEGRAM_BOT_TOKEN")
         return
     
     load_state()
+    load_subscribers()
     
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("subscribe", subscribe))
+    application.add_handler(CommandHandler("unsubscribe", unsubscribe))
     application.add_handler(CommandHandler("stats", stats))
     application.add_handler(CommandHandler("info", info))
+    application.add_handler(CommandHandler("dashboard", dashboard))
+    application.add_handler(CallbackQueryHandler(button_callback))
     
     async with application:
         await application.initialize()
@@ -456,8 +728,9 @@ async def main():
 
 if __name__ == '__main__':
     print("""
-XAU/USD Signal Bot V31 - Deriv Edition
+XAU/USD Signal Bot V31 - Public Edition
 Tanpa API Key - Menggunakan Deriv WebSocket
+Bot Public - Semua orang bisa subscribe
     """)
     try:
         asyncio.run(main())
