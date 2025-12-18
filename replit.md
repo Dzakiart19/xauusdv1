@@ -10,17 +10,18 @@ I prefer simple language and detailed explanations. I want iterative development
 Simplified from multi-indicator consensus to a clean three-indicator scalping approach:
 
 ### Entry Rules:
-1. **EMA 50 (Trend Direction)**
-   - Price > EMA50 = Bullish bias → Look for BUY
-   - Price < EMA50 = Bearish bias → Look for SELL
+1. **EMA 50 (Trend Direction Filter)**
+   - Price > EMA50 = Bullish bias → Look for BUY only
+   - Price < EMA50 = Bearish bias → Look for SELL only
 
-2. **RSI 3 (Entry Timing - High Sensitivity)**
-   - RSI < 30 (Oversold) = Potential BUY entry
-   - RSI > 70 (Overbought) = Potential SELL entry
+2. **RSI 3 (Entry Timing - Exit from Extreme Zone)**
+   - **BUY**: RSI was < 30 (oversold), then RSI rises back above 23 (exiting oversold)
+   - **SELL**: RSI was > 70 (overbought), then RSI drops back below 77 (exiting overbought)
+   - Entry happens when RSI EXITS the extreme zone, not while still in it
 
 3. **ADX 55 (Trend Strength Filter)**
    - ADX > 30 = Trend is strong enough → Allow entry
-   - ADX ≤ 30 = Trend too weak → NO entry
+   - ADX ≤ 30 = Trend too weak → NO entry (skip signal)
 
 ### Money Management:
 - **Fixed Stop Loss:** 3 USD below/above entry
@@ -29,18 +30,27 @@ Simplified from multi-indicator consensus to a clean three-indicator scalping ap
 - **Risk per Trade:** 3 USD
 - **Lot Size:** 0.01
 
-### Example Entries:
-**BUY Entry:**
-- Harga > EMA50 (bullish trend)
-- RSI < 30 (oversold, buying pressure)
-- ADX > 30 (strong trend)
-→ Entry at current price, SL = Entry - $3, TP1 = Entry + $3, TP2 = Entry + $4.50
+### Entry Flow - BUY:
+1. Harga > EMA50 (bullish trend) ✓
+2. RSI turun ke area oversold (< 30) ⏳
+3. Tunggu RSI naik kembali keluar dari oversold (> 23) ✓
+4. ADX > 30 (tren kuat) ✓
+→ Entry BUY, SL = Entry - $3, TP1 = Entry + $3, TP2 = Entry + $4.50
 
-**SELL Entry:**
-- Harga < EMA50 (bearish trend)
-- RSI > 70 (overbought, selling pressure)
-- ADX > 30 (strong trend)
-→ Entry at current price, SL = Entry + $3, TP1 = Entry - $3, TP2 = Entry - $4.50
+### Entry Flow - SELL:
+1. Harga < EMA50 (bearish trend) ✓
+2. RSI naik ke area overbought (> 70) ⏳
+3. Tunggu RSI turun kembali keluar dari overbought (< 77) ✓
+4. ADX > 30 (tren kuat) ✓
+→ Entry SELL, SL = Entry + $3, TP1 = Entry - $3, TP2 = Entry - $4.50
+
+### Comparison BUY vs SELL:
+| Component | BUY | SELL |
+|-----------|-----|------|
+| EMA 50 | Price > EMA50 | Price < EMA50 |
+| RSI | Was < 30, now rising > 23 | Was > 70, now dropping < 77 |
+| ADX | > 30 | > 30 |
+| Direction | BUY | SELL |
 
 ## System Architecture - v2.0
 The bot remains modular with the same components as v1.3 but simplified indicator calculations:

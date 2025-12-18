@@ -354,30 +354,55 @@ class SignalEngine:
                     rsi_value = latest[rsi_col]
                     adx_value = latest[adx_col]
                     
+                    prev_rsi_value = previous[rsi_col] if rsi_col in previous.index else None
+                    
                     if pd.isna(ema50_value) or pd.isna(rsi_value) or pd.isna(adx_value):
                         bot_logger.warning("⚠️ Invalid indicator values, waiting...")
                         await asyncio.sleep(BotConfig.ANALYSIS_INTERVAL)
                         continue
                     
-                    bot_logger.info(f"📊 Analysis: Price=${latest_close:.3f}, EMA50=${ema50_value:.3f}, RSI={rsi_value:.1f}, ADX={adx_value:.1f}")
+                    if prev_rsi_value is None or pd.isna(prev_rsi_value):
+                        bot_logger.warning("⚠️ Previous RSI not available, waiting...")
+                        await asyncio.sleep(BotConfig.ANALYSIS_INTERVAL)
+                        continue
                     
-                    # NEW SCALPING STRATEGY
+                    bot_logger.info(f"📊 Analysis: Price=${latest_close:.3f}, EMA50=${ema50_value:.3f}, RSI={rsi_value:.1f} (prev={prev_rsi_value:.1f}), ADX={adx_value:.1f}")
+                    
+                    # SCALPING STRATEGY v2.0
                     # 1. Trend Filter: EMA50
-                    # 2. Entry Signal: RSI oversold/overbought
+                    # 2. Entry Signal: RSI EXITING from extreme zone (not just in the zone)
                     # 3. Strength Filter: ADX > 30
+                    #
+                    # BUY: Price > EMA50, RSI was oversold (<30) and now exiting (rising above 23)
+                    # SELL: Price < EMA50, RSI was overbought (>70) and now exiting (dropping below 77)
                     
                     final_signal = None
                     
                     if adx_value < BotConfig.ADX_FILTER_THRESHOLD:
                         bot_logger.info(f"❌ ADX too low ({adx_value:.1f} < {BotConfig.ADX_FILTER_THRESHOLD}), skip")
                     elif latest_close > ema50_value:
-                        if rsi_value < BotConfig.RSI_OVERSOLD:
-                            bot_logger.info(f"🟢 BUY Signal: Price > EMA50, RSI Oversold ({rsi_value:.1f} < 30), ADX Strong ({adx_value:.1f})")
+                        # BUY Logic: Price ABOVE EMA50 (bullish), RSI was oversold and now exiting (rising)
+                        rsi_was_oversold = prev_rsi_value < BotConfig.RSI_OVERSOLD
+                        rsi_exiting_oversold = rsi_value >= BotConfig.RSI_EXIT_OVERSOLD and rsi_value > prev_rsi_value
+                        
+                        if rsi_was_oversold and rsi_exiting_oversold:
+                            bot_logger.info(f"🟢 BUY Signal: Price > EMA50, RSI exiting oversold ({prev_rsi_value:.1f} → {rsi_value:.1f}), ADX={adx_value:.1f}")
                             final_signal = 'BUY'
-                    else:
-                        if rsi_value > BotConfig.RSI_OVERBOUGHT:
-                            bot_logger.info(f"🔴 SELL Signal: Price < EMA50, RSI Overbought ({rsi_value:.1f} > 70), ADX Strong ({adx_value:.1f})")
+                        elif rsi_was_oversold:
+                            bot_logger.info(f"⏳ BUY Setup: RSI oversold ({prev_rsi_value:.1f}), waiting for exit above {BotConfig.RSI_EXIT_OVERSOLD}")
+                    elif latest_close < ema50_value:
+                        # SELL Logic: Price BELOW EMA50 (bearish), RSI was overbought and now exiting (dropping)
+                        rsi_was_overbought = prev_rsi_value > BotConfig.RSI_OVERBOUGHT
+                        rsi_exiting_overbought = rsi_value <= BotConfig.RSI_EXIT_OVERBOUGHT and rsi_value < prev_rsi_value
+                        
+                        if rsi_was_overbought and rsi_exiting_overbought:
+                            bot_logger.info(f"🔴 SELL Signal: Price < EMA50, RSI exiting overbought ({prev_rsi_value:.1f} → {rsi_value:.1f}), ADX={adx_value:.1f}")
                             final_signal = 'SELL'
+                        elif rsi_was_overbought:
+                            bot_logger.info(f"⏳ SELL Setup: RSI overbought ({prev_rsi_value:.1f}), waiting for exit below {BotConfig.RSI_EXIT_OVERBOUGHT}")
+                    else:
+                        # Price equals EMA50 - no clear trend direction
+                        bot_logger.info(f"⚖️ Price = EMA50, no clear trend direction, skip")
                     
                     if final_signal and not self._can_generate_signal():
                         if self.last_signal_time is not None:

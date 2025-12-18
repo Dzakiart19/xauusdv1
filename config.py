@@ -17,6 +17,9 @@ class BotConfig:
     RSI_PERIOD = 3
     RSI_OVERBOUGHT = 70
     RSI_OVERSOLD = 30
+    # RSI Exit thresholds - entry when RSI exits extreme zone
+    RSI_EXIT_OVERSOLD = 23  # Entry BUY when RSI rises above this after being oversold
+    RSI_EXIT_OVERBOUGHT = 77  # Entry SELL when RSI drops below this after being overbought
     
     # ADX 55: Trend Strength Filter
     ADX_FILTER_PERIOD = 55
