@@ -1,4 +1,4 @@
-# XAU/USD Signal Bot V31 - Public Edition
+# XAU/USD Signal Bot V31.3 - Pro Edition
 
 Bot Telegram untuk signal trading XAU/USD (Gold) menggunakan data real-time dari Deriv WebSocket tanpa memerlukan API key.
 
@@ -9,10 +9,13 @@ Bot ini berfungsi sebagai signal provider yang memberikan notifikasi entry, stop
 ## Fitur Utama
 
 - **Public Bot**: Tidak ada restriksi chat ID, semua orang bisa subscribe
-- **Real-time Tracking**: Update posisi setiap 30 detik saat trade aktif
+- **Real-time Tracking**: Update posisi setiap 5 detik saat trade aktif
 - **Dashboard Interaktif**: Lihat status koneksi, harga, posisi aktif, dan statistik
 - **Multi-subscriber**: Kirim sinyal ke semua subscriber secara otomatis
 - **Auto-cleanup**: Hapus subscriber yang memblokir bot
+- **RSI Confirmation**: Indikator RSI untuk konfirmasi sinyal lebih akurat
+- **Trailing Stop**: Otomatis mengamankan profit dengan trailing stop
+- **Aggressive Mode**: Interval analisis 10 detik untuk respon cepat
 
 ## Struktur Project
 
@@ -46,7 +49,7 @@ Bot ini berfungsi sebagai signal provider yang memberikan notifikasi entry, stop
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   MAIN LOOP (60 detik)                      │
+│                   MAIN LOOP (10 detik)                      │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌─────────────────┐    ┌─────────────────────────────────┐ │
@@ -56,20 +59,21 @@ Bot ini berfungsi sebagai signal provider yang memberikan notifikasi entry, stop
 │           ▼                              ▼                  │
 │  ┌─────────────────┐    ┌─────────────────────────────────┐ │
 │  │ Mode Pelacakan  │    │ Mode Pencarian Sinyal           │ │
-│  │ - Cek harga 15s │    │ 1. Get candle data (200)        │ │
+│  │ - Cek harga 5s  │    │ 1. Get candle data (200)        │ │
 │  │ - Monitor SL/TP │    │ 2. Calculate indicators:        │ │
-│  │ - Live tracking │    │    - Stochastic (8,3,3)         │ │
-│  │   update setiap │    │    - ATR (14)                   │ │
-│  │   30 detik      │    │    - ADX (14)                   │ │
+│  │ - Trailing Stop │    │    - Stochastic (8,3,3)         │ │
+│  │ - Live tracking │    │    - ATR (14)                   │ │
+│  │                 │    │    - ADX (14)                   │ │
 │  └────────┬────────┘    │    - EMA (21)                   │ │
-│           │             │ 3. Check signal conditions      │ │
-│           ▼             └────────────────┬────────────────┘ │
-│  ┌─────────────────┐                     │                  │
-│  │ Trade Result?   │                     ▼                  │
-│  │ - TP1 Hit       │    ┌─────────────────────────────────┐ │
-│  │ - TP2 Hit (WIN) │    │ Valid Signal Found?             │ │
-│  │ - SL Hit (LOSS) │    └────────────────┬────────────────┘ │
-│  │ - BE            │                     │                  │
+│           │             │    - RSI (14)                   │ │
+│           ▼             │ 3. Check signal conditions      │ │
+│  ┌─────────────────┐    └────────────────┬────────────────┘ │
+│  │ Trade Result?   │                     │                  │
+│  │ - TP1 Hit       │                     ▼                  │
+│  │ - TP2 Hit (WIN) │    ┌─────────────────────────────────┐ │
+│  │ - SL Hit (LOSS) │    │ Valid Signal Found?             │ │
+│  │ - BE            │    └────────────────┬────────────────┘ │
+│  │ - Trailing Stop │                     │                  │
 │  └────────┬────────┘                     ▼                  │
 │           │             ┌─────────────────────────────────┐ │
 │           ▼             │ YES: Generate Chart             │ │
@@ -87,7 +91,7 @@ Bot ini berfungsi sebagai signal provider yang memberikan notifikasi entry, stop
 
 ```
 DerivWebSocket Class
-├── connect()           - Connect ke Deriv WebSocket
+├── connect()           - Connect ke Deriv WebSocket (exponential backoff)
 ├── subscribe_ticks()   - Subscribe ke real-time tick
 ├── get_candles()       - Get historical OHLC data
 ├── get_active_symbols() - Get available symbols
@@ -106,6 +110,7 @@ Main Bot
 │   ├── /subscribe  - Berlangganan sinyal
 │   ├── /unsubscribe- Berhenti berlangganan
 │   ├── /dashboard  - Dashboard real-time
+│   ├── /signal     - Lihat sinyal terakhir
 │   ├── /stats      - Show statistics
 │   └── /info       - System info
 ├── Subscriber Management
@@ -119,9 +124,11 @@ Main Bot
 │   ├── send_dashboard()        - Kirim dashboard interaktif
 │   └── send_tracking_update()  - Update posisi real-time
 ├── Analysis
-│   └── calculate_indicators()  - Stoch, ATR, ADX, EMA
+│   └── calculate_indicators()  - Stoch, ATR, ADX, EMA, RSI
 ├── Signal Engine
 │   └── signal_engine_loop()    - Main trading loop
+├── Trade Management
+│   └── Trailing Stop Logic     - Otomatis geser SL mengikuti profit
 └── Utilities
     ├── generate_chart()        - Create candlestick chart
     ├── send_photo()            - Send to all subscribers
@@ -136,11 +143,13 @@ Main Bot
 - Stochastic K crosses above D (bullish crossover)
 - ADX >= 15 (trend strength filter)
 - Close > EMA 21 (bullish trend)
+- RSI < 70 (not overbought)
 
 **SELL Signal:**
 - Stochastic K crosses below D (bearish crossover)
 - ADX >= 15 (trend strength filter)
 - Close < EMA 21 (bearish trend)
+- RSI > 30 (not oversold)
 
 ### Risk Management
 
@@ -154,8 +163,9 @@ Main Bot
 
 1. **Active**: Monitoring SL dan TP1
 2. **TP1 Hit**: Pindahkan SL ke entry (Break Even)
-3. **TP2 Hit**: Trade ditutup sebagai WIN
-4. **SL Hit**: Trade ditutup sebagai LOSS/BE
+3. **Trailing Stop**: Saat profit >= 5 pips, SL otomatis mengikuti 50% profit
+4. **TP2 Hit**: Trade ditutup sebagai WIN
+5. **SL Hit**: Trade ditutup sebagai LOSS/BE/WIN (tergantung trailing)
 
 ## Telegram Commands
 
@@ -165,6 +175,7 @@ Main Bot
 | /subscribe | Berlangganan sinyal trading |
 | /unsubscribe | Berhenti berlangganan |
 | /dashboard | Dashboard real-time (harga, posisi, statistik) |
+| /signal | Lihat sinyal terakhir yang dikirim |
 | /stats | Lihat statistik trading |
 | /info | Info sistem (connection, price, subscriber count) |
 
@@ -184,7 +195,7 @@ Dashboard menampilkan:
 
 ## Real-time Tracking
 
-Saat ada posisi aktif, bot mengirimkan update setiap ~30 detik berisi:
+Saat ada posisi aktif, bot mengirimkan update setiap ~5 detik berisi:
 - Harga real-time
 - Estimasi P&L
 - Jarak ke TP1, TP2, SL
@@ -217,9 +228,10 @@ wss://ws.derivws.com/websockets/v3?app_id=1089
 ## Best Practices
 
 ### 1. Connection Management
-- Reconnect otomatis saat connection lost
+- Reconnect otomatis dengan exponential backoff
 - Keep-alive ping setiap 30 detik
-- Max 10 reconnection attempts
+- Max 15 reconnection attempts
+- Delay 2s - 60s dengan exponential backoff
 
 ### 2. Data Handling
 - Buffer 200 candles untuk indicator calculation
@@ -239,6 +251,14 @@ wss://ws.derivws.com/websockets/v3?app_id=1089
 - Rate-limited tracking updates
 
 ## Recent Changes
+
+- **V31.3 Pro Update (Dec 2025)**:
+  - Interval analisis dipercepat dari 20 detik menjadi 10 detik
+  - Tambah indikator RSI untuk konfirmasi sinyal lebih akurat
+  - Tambah fitur trailing stop untuk mengamankan profit
+  - Tambah command /signal untuk lihat sinyal terakhir
+  - WebSocket reconnection dengan exponential backoff
+  - Max reconnection attempts ditingkatkan ke 15
 
 - **V31.2 Aggressive Update (Dec 2025)**:
   - Interval analisis dipercepat dari 60 detik menjadi 20 detik dengan random jitter

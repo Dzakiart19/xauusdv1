@@ -48,6 +48,7 @@ gold_symbol = None
 subscribers = set()
 dashboard_messages = {}
 tracking_message_ids = {}
+last_signal_info = {}
 
 CHART_FILENAME = 'chart_v31.png'
 STATE_FILENAME = 'bot_state_v31.json'
@@ -156,6 +157,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"├ /subscribe - Mulai berlangganan\n"
         f"├ /unsubscribe - Berhenti langganan\n"
         f"├ /dashboard - Lihat posisi aktif\n"
+        f"├ /signal - Lihat sinyal terakhir\n"
         f"├ /stats - Statistik trading\n"
         f"└ /info - Info sistem\n\n"
         f"💡 Bot ini aktif 24 jam mencari sinyal terbaik untuk Anda!",
@@ -243,14 +245,52 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💰 Harga Terakhir: {price_str}\n"
         f"👥 Total Subscriber: {subscriber_count}\n\n"
         f"📊 Data Source: Deriv\n"
-        f"⏱️ Interval Analisis: ~20 detik\n"
+        f"⏱️ Interval Analisis: ~10 detik\n"
         f"🔄 Update Tracking: 5 detik\n\n"
         f"🤖 Bot berjalan 24 jam non-stop!",
         parse_mode='Markdown'
     )
 
 async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await send_dashboard(update.message.chat_id, context.bot)
+    if update.message:
+        await send_dashboard(update.message.chat_id, context.bot)
+
+async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message:
+        return
+    
+    if not last_signal_info:
+        await update.message.reply_text(
+            "🔍 *Belum Ada Sinyal*\n\n"
+            "Bot sedang mencari sinyal terbaik untuk Anda.\n"
+            "💡 Gunakan /subscribe untuk menerima notifikasi otomatis.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    direction = last_signal_info.get('direction', 'N/A')
+    entry = last_signal_info.get('entry_price', 0)
+    tp1 = last_signal_info.get('tp1_level', 0)
+    tp2 = last_signal_info.get('tp2_level', 0)
+    sl = last_signal_info.get('sl_level', 0)
+    signal_time = last_signal_info.get('time', 'N/A')
+    status = last_signal_info.get('status', 'N/A')
+    
+    dir_emoji = "📈" if direction == 'BUY' else "📉"
+    
+    await update.message.reply_text(
+        f"📋 *SINYAL TERAKHIR*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{dir_emoji} Arah: *{direction}*\n"
+        f"🕐 Waktu: {signal_time}\n"
+        f"📊 Status: *{status}*\n\n"
+        f"💵 Entry: *${entry:.3f}*\n"
+        f"🎯 TP1: ${tp1:.3f}\n"
+        f"🏆 TP2: ${tp2:.3f}\n"
+        f"🛑 SL: ${sl:.3f}\n\n"
+        f"💡 Gunakan /dashboard untuk tracking real-time",
+        parse_mode='Markdown'
+    )
 
 async def send_dashboard(chat_id, bot):
     status = "🟢 Terhubung" if (deriv_ws and deriv_ws.connected) else "🔴 Terputus"
@@ -649,14 +689,42 @@ async def signal_engine_loop(bot):
                             result_info = {'type': 'TP1_HIT'}
                     
                     elif trade_status == 'tp1_hit':
-                        if active_trade['direction'] == 'BUY' and current_price <= active_trade['entry_price']:
-                            result_info = {'type': 'BREAK_EVEN'}
-                        elif active_trade['direction'] == 'BUY' and current_price >= active_trade['tp2_level']:
-                            result_info = {'type': 'WIN'}
-                        elif active_trade['direction'] == 'SELL' and current_price >= active_trade['entry_price']:
-                            result_info = {'type': 'BREAK_EVEN'}
-                        elif active_trade['direction'] == 'SELL' and current_price <= active_trade['tp2_level']:
-                            result_info = {'type': 'WIN'}
+                        entry = active_trade['entry_price']
+                        tp2 = active_trade['tp2_level']
+                        current_sl = active_trade['sl_level']
+                        
+                        if active_trade['direction'] == 'BUY':
+                            profit_pips = (current_price - entry) * 10
+                            if profit_pips >= 5:
+                                new_sl = entry + (current_price - entry) * 0.5
+                                if new_sl > current_sl:
+                                    active_trade['sl_level'] = new_sl
+                                    save_active_trade()
+                                    bot_logger.info(f"🔄 Trailing Stop: SL dipindah ke ${new_sl:.3f} (+{(new_sl - entry)*10:.1f} pips)")
+                            
+                            if current_price <= active_trade['sl_level']:
+                                if active_trade['sl_level'] > entry:
+                                    result_info = {'type': 'WIN'}
+                                else:
+                                    result_info = {'type': 'BREAK_EVEN'}
+                            elif current_price >= tp2:
+                                result_info = {'type': 'WIN'}
+                        else:
+                            profit_pips = (entry - current_price) * 10
+                            if profit_pips >= 5:
+                                new_sl = entry - (entry - current_price) * 0.5
+                                if new_sl < current_sl:
+                                    active_trade['sl_level'] = new_sl
+                                    save_active_trade()
+                                    bot_logger.info(f"🔄 Trailing Stop: SL dipindah ke ${new_sl:.3f} (+{(entry - new_sl)*10:.1f} pips)")
+                            
+                            if current_price >= active_trade['sl_level']:
+                                if active_trade['sl_level'] < entry:
+                                    result_info = {'type': 'WIN'}
+                                else:
+                                    result_info = {'type': 'BREAK_EVEN'}
+                            elif current_price <= tp2:
+                                result_info = {'type': 'WIN'}
                     
                     if result_info.get('type') == 'TP1_HIT':
                         active_trade['status'] = 'tp1_hit'
@@ -711,6 +779,8 @@ async def signal_engine_loop(bot):
                             if await generate_chart(closing_df, active_trade, final_title):
                                 await send_photo(bot, result_caption)
                         
+                        if last_signal_info:
+                            last_signal_info['status'] = result_text
                         active_trade = {}
                         save_active_trade()
                         trade_closed = True
@@ -801,6 +871,16 @@ async def signal_engine_loop(bot):
                         if await send_photo(bot, caption):
                             active_trade = temp_trade_info
                             save_active_trade()
+                            last_signal_info.clear()
+                            last_signal_info.update({
+                                'direction': final_signal,
+                                'entry_price': latest_close,
+                                'tp1_level': tp1,
+                                'tp2_level': tp2,
+                                'sl_level': sl,
+                                'time': start_time_utc.astimezone(wib_tz).strftime('%H:%M:%S WIB'),
+                                'status': 'AKTIF'
+                            })
                             clear_tracking_messages()
                             current_price = await get_realtime_price()
                             if current_price:
@@ -838,6 +918,7 @@ async def main():
     application.add_handler(CommandHandler("stats", stats))
     application.add_handler(CommandHandler("info", info))
     application.add_handler(CommandHandler("dashboard", dashboard))
+    application.add_handler(CommandHandler("signal", signal))
     application.add_handler(CallbackQueryHandler(button_callback))
     
     async with application:

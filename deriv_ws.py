@@ -19,8 +19,9 @@ class DerivWebSocket:
         self.price_history = deque(maxlen=200)
         self.last_tick_time = None
         self.reconnect_attempts = 0
-        self.max_reconnect_attempts = 10
-        self.reconnect_delay = 5
+        self.max_reconnect_attempts = 15
+        self.base_reconnect_delay = 2
+        self.max_reconnect_delay = 60
         self.candles_response = None
         self.candles_event = asyncio.Event()
         self.listening = False
@@ -41,8 +42,9 @@ class DerivWebSocket:
                 return True
             except Exception as e:
                 self.reconnect_attempts += 1
-                logger.error(f"Connection failed: {e}. Retrying in {self.reconnect_delay}s...")
-                await asyncio.sleep(self.reconnect_delay)
+                delay = min(self.base_reconnect_delay * (2 ** self.reconnect_attempts), self.max_reconnect_delay)
+                logger.error(f"Connection failed: {e}. Retrying in {delay}s... (exponential backoff)")
+                await asyncio.sleep(delay)
         
         logger.critical("Max reconnection attempts reached")
         return False
