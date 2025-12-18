@@ -18,6 +18,15 @@ class SignalEngine:
         self.gold_symbol = "frxXAUUSD"
         self.cached_candles_df = None
         self.last_candle_fetch = None
+        self.signal_history = []
+        self.last_signal_cooldown = None
+        self.max_signals_per_day = 10
+        self.signals_today = 0
+        self.last_date_check = None
+    
+    def _has_telegram_service(self):
+        """Check if telegram service is available"""
+        return self.telegram_service is not None
     
     def get_deriv_ws(self):
         return self.deriv_ws
@@ -62,7 +71,7 @@ class SignalEngine:
         return None
     
     async def send_photo(self, bot, caption):
-        if os.path.exists(BotConfig.CHART_FILENAME):
+        if os.path.exists(BotConfig.CHART_FILENAME) and self._has_telegram_service():
             await self.telegram_service.send_to_all_subscribers(bot, caption, BotConfig.CHART_FILENAME)
             try:
                 os.remove(BotConfig.CHART_FILENAME)
@@ -73,6 +82,8 @@ class SignalEngine:
         return False
     
     async def notify_restart(self, bot):
+        if not self._has_telegram_service():
+            return
         restart_msg = (
             "🔄 *BOT RESTART NOTIFICATION*\n"
             "━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -140,7 +151,8 @@ class SignalEngine:
                             "💡 Bot akan otomatis aktif kembali saat market buka.\n"
                             "📊 Gunakan /dashboard untuk cek status."
                         )
-                        await self.telegram_service.send_to_all_subscribers(bot, market_msg)
+                        if self._has_telegram_service():
+                            await self.telegram_service.send_to_all_subscribers(bot, market_msg)
                         last_market_closed_notify = now
                     
                     await asyncio.sleep(BotConfig.MARKET_CHECK_INTERVAL)
@@ -164,6 +176,7 @@ class SignalEngine:
                 if current_signal:
                     await asyncio.sleep(2)
                     tracking_counter += 1
+                    trade_closed = False
                     
                     rt_price = await self.get_realtime_price()
                     if rt_price:
@@ -176,9 +189,9 @@ class SignalEngine:
                         
                         if tracking_counter % 15 == 0:
                             bot_logger.info(f"📍 Tracking {direction}: Price=${rt_price:.3f} Entry=${entry:.3f} SL=${sl:.3f}")
-                            await self.telegram_service.send_tracking_update(bot, rt_price, current_signal)
+                            if self._has_telegram_service():
+                                await self.telegram_service.send_tracking_update(bot, rt_price, current_signal)
                         
-                        trade_closed = False
                         result_info = None
                         
                         if direction == 'BUY':
@@ -203,7 +216,8 @@ class SignalEngine:
                                     "🏆 Target selanjutnya: TP2\n\n"
                                     "💡 Profit sebagian sudah aman!"
                                 )
-                                await self.telegram_service.send_to_all_subscribers(bot, tp1_msg)
+                                if self._has_telegram_service():
+                                    await self.telegram_service.send_to_all_subscribers(bot, tp1_msg)
                                 bot_logger.info(f"✅ TP1 HIT! SL moved to BE. Price: {rt_price:.3f}")
                             
                             elif rt_price <= sl:
@@ -234,7 +248,8 @@ class SignalEngine:
                                     "🏆 Target selanjutnya: TP2\n\n"
                                     "💡 Profit sebagian sudah aman!"
                                 )
-                                await self.telegram_service.send_to_all_subscribers(bot, tp1_msg)
+                                if self._has_telegram_service():
+                                    await self.telegram_service.send_to_all_subscribers(bot, tp1_msg)
                                 bot_logger.info(f"✅ TP1 HIT! SL moved to BE. Price: {rt_price:.3f}")
                             
                             elif rt_price >= sl:
@@ -264,7 +279,8 @@ class SignalEngine:
                                 f"📊 Gunakan /stats untuk melihat statistik\n"
                                 f"🔍 Bot kembali mencari sinyal..."
                             )
-                            await self.telegram_service.send_to_all_subscribers(bot, result_caption)
+                            if self._has_telegram_service():
+                                await self.telegram_service.send_to_all_subscribers(bot, result_caption)
                             
                             if self.state_manager.last_signal_info:
                                 self.state_manager.last_signal_info['status'] = result_text
@@ -387,7 +403,8 @@ class SignalEngine:
                             if BotConfig.GENERATE_CHARTS:
                                 photo_sent = await self.send_photo(bot, caption)
                             else:
-                                await self.telegram_service.send_to_all_subscribers(bot, caption)
+                                if self._has_telegram_service():
+                                    await self.telegram_service.send_to_all_subscribers(bot, caption)
                                 photo_sent = True
                             
                             if photo_sent:
@@ -405,7 +422,7 @@ class SignalEngine:
                                 })
                                 self.state_manager.clear_user_tracking_messages()
                                 rt_price = await self.get_realtime_price()
-                                if rt_price:
+                                if rt_price and self._has_telegram_service():
                                     await self.telegram_service.send_tracking_update(bot, rt_price, self.state_manager.current_signal)
                                 bot_logger.info("✅ Sinyal berhasil dikirim! Mode pelacakan aktif.")
                     else:
