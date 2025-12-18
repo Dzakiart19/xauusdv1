@@ -61,8 +61,13 @@ The bot is built with a modular architecture, refactored from a monolithic desig
 ## Deployment (Koyeb)
 - **Docker Support**: Project includes `Dockerfile` and `requirements.txt` for containerized deployment
 - **Health Check**: Endpoint at `/health` for liveness monitoring
-- **Self-Ping**: Bot pings itself every 5 minutes to prevent sleeping
+- **Self-Ping**: Bot pings itself every 45 seconds with persistent session to prevent sleeping
 - **Port**: Configurable via `PORT` environment variable (default: 8000)
+- **Optimizations for Free Tier**:
+    - Win/lose results sent as text-only (no chart) to save storage
+    - Chart files auto-deleted immediately after sending to Telegram
+    - Analysis interval 15s with jitter for CPU efficiency
+    - Active trades cleared on restart - always searches fresh signals
 - **Files**:
     - `Dockerfile`: Docker image configuration
     - `requirements.txt`: Python dependencies for Docker
