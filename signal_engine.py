@@ -117,8 +117,15 @@ class SignalEngine:
         if not self.state_manager.current_signal:
             for chat_id in self.state_manager.subscribers:
                 user_state = self.state_manager.get_user_state(chat_id)
-                if user_state.get('active_trade'):
-                    self.state_manager.current_signal = user_state['active_trade'].copy()
+                active_trade = user_state.get('active_trade')
+                if active_trade and active_trade.get('direction'):
+                    restored_signal = active_trade.copy()
+                    if isinstance(restored_signal.get('start_time_utc'), str):
+                        try:
+                            restored_signal['start_time_utc'] = datetime.datetime.fromisoformat(restored_signal['start_time_utc'])
+                        except:
+                            restored_signal['start_time_utc'] = datetime.datetime.now(datetime.timezone.utc)
+                    self.state_manager.current_signal = restored_signal
                     bot_logger.info(f"✅ Restored active trade from subscriber {chat_id}")
                     break
         
@@ -181,6 +188,7 @@ class SignalEngine:
                         trade_status = current_signal.get('status', 'active')
                         
                         if tracking_counter % 15 == 0:
+                            bot_logger.info(f"📍 Tracking {direction}: Price=${rt_price:.3f} Entry=${entry:.3f} SL=${sl:.3f}")
                             await self.telegram_service.send_tracking_update(bot, rt_price, current_signal)
                         
                         trade_closed = False

@@ -49,6 +49,8 @@ async def main():
     application.add_handler(CommandHandler("signal", telegram_service.signal))
     application.add_handler(CallbackQueryHandler(telegram_service.button_callback))
     
+    signal_task = None
+    
     async with application:
         await application.initialize()
         await application.start()
@@ -57,12 +59,18 @@ async def main():
         
         bot_logger.info("🚀 Bot dimulai! Otomatis mencari sinyal 24 jam...")
         bot_logger.info(f"🌐 Health server aktif di port {BotConfig.PORT}")
-        await signal_engine.run(application.bot)
         
-        if application.updater:
-            await application.updater.stop()
-        await application.stop()
-        await health_server.cleanup()
+        signal_task = asyncio.create_task(signal_engine.run(application.bot))
+        
+        try:
+            await signal_task
+        except asyncio.CancelledError:
+            bot_logger.info("Signal engine task cancelled")
+        finally:
+            if application.updater:
+                await application.updater.stop()
+            await application.stop()
+            await health_server.cleanup()
 
 
 if __name__ == '__main__':
