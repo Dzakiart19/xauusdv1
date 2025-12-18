@@ -1,6 +1,10 @@
 import logging
 import os
 import datetime
+import asyncio
+from typing import Optional, Any
+from functools import wraps
+
 import pandas as pd
 import pandas_ta as ta
 import mplfinance as mpf
@@ -9,11 +13,11 @@ from config import BotConfig
 
 
 class NoHttpxFilter(logging.Filter):
-    def filter(self, record):
+    def filter(self, record: logging.LogRecord) -> bool:
         return 'httpx' not in record.name and 'HTTP Request' not in record.getMessage()
 
 
-def setup_logging():
+def setup_logging() -> logging.Logger:
     bot_logger = logging.getLogger("BotScalping")
     bot_logger.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -38,20 +42,37 @@ def setup_logging():
 bot_logger = setup_logging()
 
 
-def calculate_indicators(df):
-    """Calculate only necessary indicators for scalping strategy"""
-    # EMA 50: Trend direction
+def async_retry(max_retries: int = 3, delay: float = 1.0, exceptions: tuple = (Exception,)):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            last_exception: Optional[Exception] = None
+            for attempt in range(max_retries):
+                try:
+                    return await func(*args, **kwargs)
+                except exceptions as e:
+                    last_exception = e
+                    if attempt < max_retries - 1:
+                        wait_time = delay * (2 ** attempt)
+                        bot_logger.warning(f"Retry {attempt + 1}/{max_retries} for {func.__name__}: {e}")
+                        await asyncio.sleep(wait_time)
+            bot_logger.error(f"All {max_retries} retries failed for {func.__name__}: {last_exception}")
+            if last_exception is not None:
+                raise last_exception
+            raise RuntimeError("Retry failed with unknown error")
+        return wrapper
+    return decorator
+
+
+def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df.ta.ema(length=BotConfig.MA_MEDIUM_PERIOD, append=True)
-    # RSI 3: Entry timing (more sensitive)
     df.ta.rsi(length=BotConfig.RSI_PERIOD, append=True)
-    # ADX 55: Trend strength filter
     df.ta.adx(length=BotConfig.ADX_FILTER_PERIOD, append=True)
-    # ATR: For context (optional)
     df.ta.atr(length=BotConfig.ATR_PERIOD, append=True)
     return df
 
 
-async def generate_chart(df, trade_info=None, title="XAU/USD Scalping"):
+async def generate_chart(df: pd.DataFrame, trade_info: Optional[dict] = None, title: str = "XAU/USD Scalping") -> bool:
     try:
         if len(df) < 50:
             bot_logger.warning("Not enough data for chart generation")
@@ -129,7 +150,7 @@ async def generate_chart(df, trade_info=None, title="XAU/USD Scalping"):
         return False
 
 
-def format_pnl(direction, entry, current_price):
+def format_pnl(direction: str, entry: float, current_price: Optional[float]) -> str:
     if current_price:
         if direction == 'BUY':
             pnl_pips = (current_price - entry) * 10
@@ -140,7 +161,7 @@ def format_pnl(direction, entry, current_price):
     return "N/A"
 
 
-def get_win_rate_emoji(win_rate):
+def get_win_rate_emoji(win_rate: float) -> str:
     if win_rate >= 60:
         return "🔥"
     elif win_rate >= 50:
@@ -148,7 +169,30 @@ def get_win_rate_emoji(win_rate):
     return "📊"
 
 
-def calculate_win_rate(win_count, loss_count):
+def calculate_win_rate(win_count: int, loss_count: int) -> float:
     if (win_count + loss_count) > 0:
         return (win_count / (win_count + loss_count)) * 100
     return 0.0
+
+
+def format_duration(seconds: float) -> str:
+    if seconds < 60:
+        return f"{int(seconds)}s"
+    elif seconds < 3600:
+        minutes = int(seconds // 60)
+        secs = int(seconds % 60)
+        return f"{minutes}m {secs}s"
+    else:
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        return f"{hours}h {minutes}m"
+
+
+def sanitize_message(text: str) -> str:
+    special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    result = text
+    for char in special_chars:
+        if char in ['_', '*']:
+            continue
+        result = result.replace(char, f'\\{char}')
+    return result

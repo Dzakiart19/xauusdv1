@@ -2,6 +2,7 @@ import json
 import os
 import datetime
 import logging
+from typing import Optional, Any
 
 from config import BotConfig
 
@@ -11,13 +12,15 @@ logger = logging.getLogger("StateManager")
 
 class StateManager:
     def __init__(self):
-        self.user_states = {}
-        self.subscribers = set()
-        self.current_signal = {}
-        self.last_signal_info = {}
+        self.user_states: dict[str, dict] = {}
+        self.subscribers: set[str] = set()
+        self.current_signal: dict = {}
+        self.last_signal_info: dict = {}
+        self.signal_history: list[dict] = []
+        self._load_signal_history()
     
     @staticmethod
-    def get_default_user_state():
+    def get_default_user_state() -> dict:
         return {
             'win_count': 0,
             'loss_count': 0,
@@ -27,13 +30,13 @@ class StateManager:
             'last_signal_time': None
         }
     
-    def get_user_state(self, chat_id):
+    def get_user_state(self, chat_id: str | int) -> dict:
         chat_id = str(chat_id)
         if chat_id not in self.user_states:
             self.user_states[chat_id] = self.get_default_user_state()
         return self.user_states[chat_id]
     
-    def save_user_states(self):
+    def save_user_states(self) -> None:
         try:
             states_to_save = {}
             for chat_id, state in self.user_states.items():
@@ -52,7 +55,7 @@ class StateManager:
         except Exception as e:
             logger.error(f"Failed to save user states: {e}")
     
-    def load_user_states(self):
+    def load_user_states(self) -> None:
         try:
             if os.path.exists(BotConfig.USER_STATES_FILENAME):
                 with open(BotConfig.USER_STATES_FILENAME, 'r') as f:
@@ -63,14 +66,14 @@ class StateManager:
                             state['active_trade']['start_time_utc'] = datetime.datetime.fromisoformat(
                                 state['active_trade']['start_time_utc']
                             )
-                        except:
+                        except (ValueError, TypeError):
                             pass
                     self.user_states[chat_id] = state
                 logger.info(f"Loaded states for {len(self.user_states)} users")
         except Exception as e:
             logger.error(f"Failed to load user states: {e}")
     
-    def save_subscribers(self):
+    def save_subscribers(self) -> None:
         try:
             temp_file = f"{BotConfig.SUBSCRIBERS_FILENAME}.tmp"
             with open(temp_file, 'w') as f:
@@ -79,7 +82,7 @@ class StateManager:
         except Exception as e:
             logger.error(f"Failed to save subscribers: {e}")
     
-    def load_subscribers(self):
+    def load_subscribers(self) -> None:
         try:
             if os.path.exists(BotConfig.SUBSCRIBERS_FILENAME):
                 with open(BotConfig.SUBSCRIBERS_FILENAME, 'r') as f:
@@ -88,20 +91,20 @@ class StateManager:
         except Exception as e:
             logger.error(f"Failed to load subscribers: {e}")
     
-    def add_subscriber(self, chat_id):
+    def add_subscriber(self, chat_id: str | int) -> None:
         chat_id = str(chat_id)
         self.subscribers.add(chat_id)
         self.save_subscribers()
     
-    def remove_subscriber(self, chat_id):
+    def remove_subscriber(self, chat_id: str | int) -> None:
         chat_id = str(chat_id)
         self.subscribers.discard(chat_id)
         self.save_subscribers()
     
-    def is_subscriber(self, chat_id):
+    def is_subscriber(self, chat_id: str | int) -> bool:
         return str(chat_id) in self.subscribers
     
-    def reset_user_data(self, chat_id):
+    def reset_user_data(self, chat_id: str | int) -> str:
         chat_id = str(chat_id)
         user_state = self.get_user_state(chat_id)
         old_stats = f"W:{user_state['win_count']} L:{user_state['loss_count']} BE:{user_state['be_count']}"
@@ -115,7 +118,7 @@ class StateManager:
         self.save_user_states()
         return old_stats
     
-    def update_trade_result(self, result_type):
+    def update_trade_result(self, result_type: str) -> None:
         for cid in self.subscribers:
             us = self.get_user_state(cid)
             if us.get('active_trade'):
@@ -129,28 +132,69 @@ class StateManager:
                 us['tracking_message_id'] = None
         self.save_user_states()
     
-    def set_active_trade_for_subscribers(self, trade_info):
+    def set_active_trade_for_subscribers(self, trade_info: dict) -> None:
         for cid in self.subscribers:
             us = self.get_user_state(cid)
             us['active_trade'] = trade_info.copy()
             us['tracking_message_id'] = None
         self.save_user_states()
     
-    def clear_user_tracking_messages(self):
+    def clear_user_tracking_messages(self) -> None:
         for chat_id in self.subscribers:
             user_state = self.get_user_state(chat_id)
             user_state['tracking_message_id'] = None
         self.save_user_states()
     
-    def update_current_signal(self, signal_info):
+    def update_current_signal(self, signal_info: dict) -> None:
         self.current_signal = signal_info
     
-    def clear_current_signal(self):
+    def clear_current_signal(self) -> None:
         self.current_signal = {}
     
-    def update_last_signal_info(self, info):
+    def update_last_signal_info(self, info: dict) -> None:
         self.last_signal_info.clear()
         self.last_signal_info.update(info)
+    
+    def _load_signal_history(self) -> None:
+        try:
+            if os.path.exists(BotConfig.SIGNAL_HISTORY_FILENAME):
+                with open(BotConfig.SIGNAL_HISTORY_FILENAME, 'r') as f:
+                    self.signal_history = json.load(f)
+                logger.info(f"Loaded {len(self.signal_history)} signals from history")
+        except Exception as e:
+            logger.error(f"Failed to load signal history: {e}")
+            self.signal_history = []
+    
+    def save_signal_history(self) -> None:
+        try:
+            temp_file = f"{BotConfig.SIGNAL_HISTORY_FILENAME}.tmp"
+            with open(temp_file, 'w') as f:
+                json.dump(self.signal_history[-500:], f, indent=2)
+            os.replace(temp_file, BotConfig.SIGNAL_HISTORY_FILENAME)
+        except Exception as e:
+            logger.error(f"Failed to save signal history: {e}")
+    
+    def add_signal_to_history(self, signal_info: dict) -> None:
+        entry = {
+            'id': len(self.signal_history) + 1,
+            'direction': signal_info.get('direction'),
+            'entry_price': signal_info.get('entry_price'),
+            'tp1': signal_info.get('tp1_level'),
+            'tp2': signal_info.get('tp2_level'),
+            'sl': signal_info.get('sl_level'),
+            'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            'result': 'PENDING'
+        }
+        self.signal_history.append(entry)
+        if len(self.signal_history) > 500:
+            self.signal_history = self.signal_history[-500:]
+        self.save_signal_history()
+    
+    def update_last_signal_result(self, result: str) -> None:
+        if self.signal_history:
+            self.signal_history[-1]['result'] = result
+            self.signal_history[-1]['closed_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            self.save_signal_history()
     
     def get_trade_stats(self) -> dict:
         total_wins = 0
@@ -172,4 +216,23 @@ class StateManager:
             'break_evens': total_be,
             'total_trades': total_trades,
             'win_rate': round(win_rate, 1)
+        }
+    
+    def get_today_stats(self) -> dict:
+        today = datetime.datetime.now(datetime.timezone.utc).date()
+        today_signals = [s for s in self.signal_history 
+                        if datetime.datetime.fromisoformat(s['timestamp']).date() == today]
+        
+        wins = sum(1 for s in today_signals if s.get('result') == 'WIN')
+        losses = sum(1 for s in today_signals if s.get('result') == 'LOSS')
+        be = sum(1 for s in today_signals if s.get('result') == 'BREAK_EVEN')
+        pending = sum(1 for s in today_signals if s.get('result') == 'PENDING')
+        
+        return {
+            'total': len(today_signals),
+            'wins': wins,
+            'losses': losses,
+            'break_evens': be,
+            'pending': pending,
+            'win_rate': round((wins / (wins + losses) * 100) if (wins + losses) > 0 else 0, 1)
         }

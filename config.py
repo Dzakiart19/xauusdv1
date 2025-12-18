@@ -5,66 +5,65 @@ import pytz
 
 class BotConfig:
     TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', 'YOUR_BOT_TOKEN')
+    ADMIN_CHAT_ID = os.environ.get('ADMIN_CHAT_ID', '')
     PORT = int(os.environ.get('PORT', 5000))
     GENERATE_CHARTS = os.environ.get('GENERATE_CHARTS', 'true').lower() == 'true'
     KEEP_ALIVE_INTERVAL = int(os.environ.get('KEEP_ALIVE_INTERVAL', 300))
     
-    # NEW SCALPING STRATEGY - EMA 50, RSI 3, ADX 55
-    # EMA 50: Trend Direction Filter
     MA_MEDIUM_PERIOD = 50
     
-    # RSI 3: Entry Timing (more sensitive)
     RSI_PERIOD = 3
     RSI_OVERBOUGHT = 70
     RSI_OVERSOLD = 30
-    # RSI Exit thresholds - entry when RSI exits extreme zone
-    RSI_EXIT_OVERSOLD = 23  # Entry BUY when RSI rises above this after being oversold
-    RSI_EXIT_OVERBOUGHT = 77  # Entry SELL when RSI drops below this after being overbought
+    RSI_EXIT_OVERSOLD = 23
+    RSI_EXIT_OVERBOUGHT = 77
     
-    # ADX 55: Trend Strength Filter
     ADX_FILTER_PERIOD = 55
     ADX_FILTER_THRESHOLD = 30
     
-    # Money Management: Fixed 3 USD target and stop loss
     FIXED_SL_USD = 3.0
     FIXED_TP_USD = 3.0
     LOT_SIZE = 0.01
     RISK_PER_TRADE_USD = 3.00
     
-    # ATR for additional volatility context (kept for compatibility)
     ATR_PERIOD = 14
     
-    # Analysis settings
     ANALYSIS_INTERVAL = 30
     ANALYSIS_JITTER = 10
     
-    # Signal settings
     UNLIMITED_SIGNALS = True
     SIGNAL_COOLDOWN_SECONDS = 120
     
-    # File names
     CHART_FILENAME = 'chart_scalping.png'
     USER_STATES_FILENAME = 'user_states.json'
     SUBSCRIBERS_FILENAME = 'subscribers.json'
+    SIGNAL_HISTORY_FILENAME = 'signal_history.json'
     LOG_FILENAME = 'bot_scalping.log'
     
-    # Timezone
     WIB_TZ = pytz.timezone('Asia/Jakarta')
     
+    TELEGRAM_RATE_LIMIT_DELAY = 0.05
+    TELEGRAM_BATCH_SIZE = 25
+    MAX_RETRIES = 3
+    RETRY_DELAY = 1.0
+    
+    DAILY_SUMMARY_HOUR = 21
+    DAILY_SUMMARY_MINUTE = 0
+    
     @classmethod
-    def get_ema_medium_col(cls):
+    def get_ema_medium_col(cls) -> str:
         return f'EMA_{cls.MA_MEDIUM_PERIOD}'
     
     @classmethod
-    def get_rsi_col(cls):
+    def get_rsi_col(cls) -> str:
         return f'RSI_{cls.RSI_PERIOD}'
     
     @classmethod
-    def get_adx_col(cls):
+    def get_adx_col(cls) -> str:
         return f'ADX_{cls.ADX_FILTER_PERIOD}'
     
     @classmethod
-    def get_atr_col(cls):
+    def get_atr_col(cls) -> str:
         return f'ATRr_{cls.ATR_PERIOD}'
     
     NY_TZ = pytz.timezone('America/New_York')
@@ -75,7 +74,22 @@ class BotConfig:
     MARKET_CHECK_INTERVAL = 300
     
     @classmethod
-    def is_market_open(cls):
+    def validate_config(cls) -> tuple[bool, list[str]]:
+        errors = []
+        if cls.TELEGRAM_BOT_TOKEN == 'YOUR_BOT_TOKEN':
+            errors.append("TELEGRAM_BOT_TOKEN tidak dikonfigurasi")
+        if cls.RSI_PERIOD < 1:
+            errors.append("RSI_PERIOD harus >= 1")
+        if cls.MA_MEDIUM_PERIOD < 1:
+            errors.append("MA_MEDIUM_PERIOD harus >= 1")
+        if cls.FIXED_SL_USD <= 0:
+            errors.append("FIXED_SL_USD harus > 0")
+        if cls.FIXED_TP_USD <= 0:
+            errors.append("FIXED_TP_USD harus > 0")
+        return len(errors) == 0, errors
+    
+    @classmethod
+    def is_market_open(cls) -> bool:
         now_ny = datetime.datetime.now(cls.NY_TZ)
         weekday = now_ny.weekday()
         hour = now_ny.hour
@@ -90,7 +104,7 @@ class BotConfig:
         return True
     
     @classmethod
-    def get_market_status(cls):
+    def get_market_status(cls) -> dict:
         now_ny = datetime.datetime.now(cls.NY_TZ)
         weekday = now_ny.weekday()
         hour = now_ny.hour

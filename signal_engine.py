@@ -12,27 +12,28 @@ from deriv_ws import DerivWebSocket, find_gold_symbol
 
 if TYPE_CHECKING:
     from telegram_service import TelegramService
+    from state_manager import StateManager
 
 
 class SignalEngine:
-    def __init__(self, state_manager, telegram_service: Optional['TelegramService'] = None):
+    def __init__(self, state_manager: 'StateManager', telegram_service: Optional['TelegramService'] = None):
         self.state_manager = state_manager
         self.telegram_service: Optional['TelegramService'] = telegram_service
         self.deriv_ws: Optional[DerivWebSocket] = None
-        self.gold_symbol = "frxXAUUSD"
+        self.gold_symbol: str = "frxXAUUSD"
         self.cached_candles_df: Optional[pd.DataFrame] = None
         self.last_candle_fetch: Optional[datetime.datetime] = None
         self.signal_history: list = []
         self.last_signal_time: Optional[datetime.datetime] = None
-        self.signal_cooldown_seconds = BotConfig.SIGNAL_COOLDOWN_SECONDS
-        self.total_signals_generated = 0
+        self.signal_cooldown_seconds: int = BotConfig.SIGNAL_COOLDOWN_SECONDS
+        self.total_signals_generated: int = 0
+        self._running: bool = False
+        self._shutdown_event: asyncio.Event = asyncio.Event()
     
     def _has_telegram_service(self) -> bool:
-        """Check if telegram service is available"""
         return self.telegram_service is not None
     
     def _can_generate_signal(self) -> bool:
-        """Check if enough time has passed since last signal (spam protection)"""
         if self.last_signal_time is None:
             return True
         
@@ -41,7 +42,6 @@ class SignalEngine:
         return elapsed >= self.signal_cooldown_seconds
     
     def _record_signal(self, signal_info: dict) -> None:
-        """Record signal in history for tracking"""
         self.last_signal_time = datetime.datetime.now(datetime.timezone.utc)
         self.total_signals_generated += 1
         
@@ -60,15 +60,16 @@ class SignalEngine:
         if len(self.signal_history) > 100:
             self.signal_history = self.signal_history[-100:]
         
+        self.state_manager.add_signal_to_history(signal_info)
         bot_logger.info(f"📝 Signal #{self.total_signals_generated} recorded")
     
-    def get_deriv_ws(self):
+    def get_deriv_ws(self) -> Optional[DerivWebSocket]:
         return self.deriv_ws
     
-    def get_gold_symbol(self):
+    def get_gold_symbol(self) -> str:
         return self.gold_symbol
     
-    async def get_historical_data(self):
+    async def get_historical_data(self) -> Optional[pd.DataFrame]:
         if not self.deriv_ws or not self.deriv_ws.connected:
             bot_logger.warning("WebSocket not connected, skipping data fetch...")
             return None
@@ -99,13 +100,13 @@ class SignalEngine:
             bot_logger.error(f"DATA-ERROR: {e}")
             return None
     
-    async def get_realtime_price(self):
+    async def get_realtime_price(self) -> Optional[float]:
         if self.deriv_ws and self.deriv_ws.connected:
             return self.deriv_ws.get_current_price()
         return None
     
-    async def send_photo(self, bot, caption):
-        if os.path.exists(BotConfig.CHART_FILENAME) and self._has_telegram_service():
+    async def send_photo(self, bot, caption: str) -> bool:
+        if os.path.exists(BotConfig.CHART_FILENAME) and self._has_telegram_service() and self.telegram_service:
             await self.telegram_service.send_to_all_subscribers(bot, caption, BotConfig.CHART_FILENAME)
             try:
                 os.remove(BotConfig.CHART_FILENAME)
@@ -115,8 +116,8 @@ class SignalEngine:
             return True
         return False
     
-    async def notify_restart(self, bot):
-        if not self._has_telegram_service():
+    async def notify_restart(self, bot) -> None:
+        if not self._has_telegram_service() or not self.telegram_service:
             return
         restart_msg = (
             "🔄 *BOT RESTART NOTIFICATION*\n"
@@ -127,8 +128,15 @@ class SignalEngine:
         await self.telegram_service.send_to_all_subscribers(bot, restart_msg)
         bot_logger.info("Sent restart notification to all subscribers")
     
-    async def run(self, bot):
+    def request_shutdown(self) -> None:
+        self._running = False
+        self._shutdown_event.set()
+        bot_logger.info("Shutdown requested for signal engine")
+    
+    async def run(self, bot) -> None:
         bot_logger.info("🚀 Starting Signal Engine...")
+        self._running = True
+        self._shutdown_event.clear()
         
         gold_symbols = await find_gold_symbol()
         if gold_symbols:
@@ -153,7 +161,7 @@ class SignalEngine:
         
         await asyncio.sleep(3)
         
-        self.state_manager.current_signal = None
+        self.state_manager.current_signal = {}
         for chat_id in self.state_manager.subscribers:
             user_state = self.state_manager.get_user_state(chat_id)
             user_state['active_trade'] = {}
@@ -164,16 +172,25 @@ class SignalEngine:
         await self.notify_restart(bot)
         
         tracking_counter = 0
-        last_market_closed_notify = None
+        last_market_closed_notify: Optional[datetime.datetime] = None
+        last_daily_summary: Optional[datetime.date] = None
         
-        while True:
+        while self._running:
             try:
+                now = datetime.datetime.now(BotConfig.WIB_TZ)
+                if (now.hour == BotConfig.DAILY_SUMMARY_HOUR and 
+                    now.minute >= BotConfig.DAILY_SUMMARY_MINUTE and
+                    (last_daily_summary is None or last_daily_summary != now.date())):
+                    if self._has_telegram_service() and self.telegram_service:
+                        await self.telegram_service.send_daily_summary(bot)
+                        last_daily_summary = now.date()
+                
                 market_status = BotConfig.get_market_status()
                 if not market_status['is_open']:
-                    now = datetime.datetime.now()
+                    now_dt = datetime.datetime.now()
                     should_notify = (
                         last_market_closed_notify is None or 
-                        (now - last_market_closed_notify).total_seconds() > 3600
+                        (now_dt - last_market_closed_notify).total_seconds() > 3600
                     )
                     
                     if should_notify:
@@ -185,9 +202,9 @@ class SignalEngine:
                             "💡 Bot akan otomatis aktif kembali saat market buka.\n"
                             "📊 Gunakan /dashboard untuk cek status."
                         )
-                        if self._has_telegram_service():
+                        if self._has_telegram_service() and self.telegram_service:
                             await self.telegram_service.send_to_all_subscribers(bot, market_msg)
-                        last_market_closed_notify = now
+                        last_market_closed_notify = now_dt
                     
                     await asyncio.sleep(BotConfig.MARKET_CHECK_INTERVAL)
                     continue
@@ -195,6 +212,10 @@ class SignalEngine:
                 if not self.deriv_ws.connected:
                     bot_logger.warning("⚠️ WebSocket disconnected, reconnecting...")
                     listen_task.cancel()
+                    try:
+                        await listen_task
+                    except asyncio.CancelledError:
+                        pass
                     
                     connected = await self.deriv_ws.connect()
                     if connected:
@@ -223,7 +244,7 @@ class SignalEngine:
                         
                         if tracking_counter % 15 == 0:
                             bot_logger.info(f"📍 Tracking {direction}: Price=${rt_price:.3f} Entry=${entry:.3f} SL=${sl:.3f}")
-                            if self._has_telegram_service():
+                            if self._has_telegram_service() and self.telegram_service:
                                 await self.telegram_service.send_tracking_update(bot, rt_price, current_signal)
                         
                         result_info = None
@@ -250,7 +271,7 @@ class SignalEngine:
                                     "🏆 Target selanjutnya: TP2\n\n"
                                     "💡 Profit sebagian sudah aman!"
                                 )
-                                if self._has_telegram_service():
+                                if self._has_telegram_service() and self.telegram_service:
                                     await self.telegram_service.send_to_all_subscribers(bot, tp1_msg)
                                 bot_logger.info(f"✅ TP1 HIT! SL moved to BE. Price: {rt_price:.3f}")
                             
@@ -282,7 +303,7 @@ class SignalEngine:
                                     "🏆 Target selanjutnya: TP2\n\n"
                                     "💡 Profit sebagian sudah aman!"
                                 )
-                                if self._has_telegram_service():
+                                if self._has_telegram_service() and self.telegram_service:
                                     await self.telegram_service.send_to_all_subscribers(bot, tp1_msg)
                                 bot_logger.info(f"✅ TP1 HIT! SL moved to BE. Price: {rt_price:.3f}")
                             
@@ -298,11 +319,16 @@ class SignalEngine:
                             result_text = result_info['text']
                             
                             self.state_manager.update_trade_result(result_info['type'])
+                            self.state_manager.update_last_signal_result(result_info['type'])
                             
-                            duration = round(
-                                (datetime.datetime.now(datetime.timezone.utc) - current_signal['start_time_utc']).total_seconds() / 60,
-                                1
-                            )
+                            start_time_utc = current_signal.get('start_time_utc')
+                            if start_time_utc:
+                                duration = round(
+                                    (datetime.datetime.now(datetime.timezone.utc) - start_time_utc).total_seconds() / 60,
+                                    1
+                                )
+                            else:
+                                duration = 0
                             
                             result_caption = (
                                 f"{result_emoji} *{result_text}*\n"
@@ -313,7 +339,7 @@ class SignalEngine:
                                 f"📊 Gunakan /stats untuk melihat statistik\n"
                                 f"🔍 Bot kembali mencari sinyal..."
                             )
-                            if self._has_telegram_service():
+                            if self._has_telegram_service() and self.telegram_service:
                                 await self.telegram_service.send_to_all_subscribers(bot, result_caption)
                             
                             if self.state_manager.last_signal_info:
@@ -368,20 +394,11 @@ class SignalEngine:
                     
                     bot_logger.info(f"📊 Analysis: Price=${latest_close:.3f}, EMA50=${ema50_value:.3f}, RSI={rsi_value:.1f} (prev={prev_rsi_value:.1f}), ADX={adx_value:.1f}")
                     
-                    # SCALPING STRATEGY v2.0
-                    # 1. Trend Filter: EMA50
-                    # 2. Entry Signal: RSI EXITING from extreme zone (not just in the zone)
-                    # 3. Strength Filter: ADX > 30
-                    #
-                    # BUY: Price > EMA50, RSI was oversold (<30) and now exiting (rising above 23)
-                    # SELL: Price < EMA50, RSI was overbought (>70) and now exiting (dropping below 77)
-                    
                     final_signal = None
                     
                     if adx_value < BotConfig.ADX_FILTER_THRESHOLD:
                         bot_logger.info(f"❌ ADX too low ({adx_value:.1f} < {BotConfig.ADX_FILTER_THRESHOLD}), skip")
                     elif latest_close > ema50_value:
-                        # BUY Logic: Price ABOVE EMA50 (bullish), RSI was oversold and now exiting (rising)
                         rsi_was_oversold = prev_rsi_value < BotConfig.RSI_OVERSOLD
                         rsi_exiting_oversold = rsi_value >= BotConfig.RSI_EXIT_OVERSOLD and rsi_value > prev_rsi_value
                         
@@ -391,7 +408,6 @@ class SignalEngine:
                         elif rsi_was_oversold:
                             bot_logger.info(f"⏳ BUY Setup: RSI oversold ({prev_rsi_value:.1f}), waiting for exit above {BotConfig.RSI_EXIT_OVERSOLD}")
                     elif latest_close < ema50_value:
-                        # SELL Logic: Price BELOW EMA50 (bearish), RSI was overbought and now exiting (dropping)
                         rsi_was_overbought = prev_rsi_value > BotConfig.RSI_OVERBOUGHT
                         rsi_exiting_overbought = rsi_value <= BotConfig.RSI_EXIT_OVERBOUGHT and rsi_value < prev_rsi_value
                         
@@ -401,7 +417,6 @@ class SignalEngine:
                         elif rsi_was_overbought:
                             bot_logger.info(f"⏳ SELL Setup: RSI overbought ({prev_rsi_value:.1f}), waiting for exit below {BotConfig.RSI_EXIT_OVERBOUGHT}")
                     else:
-                        # Price equals EMA50 - no clear trend direction
                         bot_logger.info(f"⚖️ Price = EMA50, no clear trend direction, skip")
                     
                     if final_signal and not self._can_generate_signal():
@@ -466,7 +481,7 @@ class SignalEngine:
                             if BotConfig.GENERATE_CHARTS:
                                 photo_sent = await self.send_photo(bot, caption)
                             else:
-                                if self._has_telegram_service():
+                                if self._has_telegram_service() and self.telegram_service:
                                     await self.telegram_service.send_to_all_subscribers(bot, caption)
                                 photo_sent = True
                             
@@ -486,7 +501,7 @@ class SignalEngine:
                                 })
                                 self.state_manager.clear_user_tracking_messages()
                                 rt_price = await self.get_realtime_price()
-                                if rt_price and self._has_telegram_service():
+                                if rt_price and self._has_telegram_service() and self.telegram_service:
                                     await self.telegram_service.send_tracking_update(bot, rt_price, self.state_manager.current_signal)
                                 bot_logger.info("✅ Sinyal Scalping berhasil dikirim! Mode pelacakan aktif.")
                     else:
@@ -497,9 +512,24 @@ class SignalEngine:
                     bot_logger.info(f"⏳ Menunggu {wait_time} detik sebelum analisis berikutnya...")
                     await asyncio.sleep(wait_time)
             
+            except asyncio.CancelledError:
+                bot_logger.info("Signal engine cancelled")
+                break
             except asyncio.TimeoutError:
                 bot_logger.error("⚠️ TIMEOUT: Proses terlalu lama")
                 await asyncio.sleep(BotConfig.ANALYSIS_INTERVAL)
             except Exception as e:
-                bot_logger.critical(f"❌ Error kritis: {e}")
+                bot_logger.critical(f"❌ Error kritis: {e}", exc_info=True)
                 await asyncio.sleep(BotConfig.ANALYSIS_INTERVAL)
+        
+        bot_logger.info("Signal engine shutting down...")
+        listen_task.cancel()
+        try:
+            await listen_task
+        except asyncio.CancelledError:
+            pass
+        
+        if self.deriv_ws:
+            await self.deriv_ws.close()
+        
+        bot_logger.info("Signal engine stopped")

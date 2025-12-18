@@ -2,23 +2,27 @@ import asyncio
 import logging
 import time
 import sys
-from aiohttp import web, ClientSession
+from typing import Optional, Callable, TYPE_CHECKING
+from aiohttp import web, ClientSession, ClientTimeout
 
 from config import BotConfig
+
+if TYPE_CHECKING:
+    from state_manager import StateManager
 
 
 logger = logging.getLogger("HealthServer")
 
 
 class HealthServer:
-    def __init__(self, state_manager, deriv_ws_getter, signal_engine_getter=None):
+    def __init__(self, state_manager: 'StateManager', deriv_ws_getter: Callable, signal_engine_getter: Optional[Callable] = None):
         self.state_manager = state_manager
         self.deriv_ws_getter = deriv_ws_getter
         self.signal_engine_getter = signal_engine_getter
-        self.runner = None
-        self.start_time = time.time()
+        self.runner: Optional[web.AppRunner] = None
+        self.start_time: float = time.time()
     
-    async def health_handler(self, request):
+    async def health_handler(self, request: web.Request) -> web.Response:
         deriv_ws = self.deriv_ws_getter()
         
         ws_stats = {}
@@ -32,6 +36,7 @@ class HealthServer:
         uptime = time.time() - self.start_time
         
         trade_stats = self.state_manager.get_trade_stats()
+        today_stats = self.state_manager.get_today_stats()
         
         signal_stats = {}
         if self.signal_engine_getter:
@@ -56,14 +61,14 @@ class HealthServer:
                         if line.startswith('VmRSS:'):
                             memory_mb = round(int(line.split()[1]) / 1024, 1)
                             break
-            except:
+            except (OSError, IOError):
                 pass
-        except:
+        except (OSError, IOError):
             pass
         
         return web.json_response({
             "status": "ok",
-            "version": "2.0-scalping",
+            "version": "2.0-pro",
             "uptime_seconds": round(uptime, 0),
             "uptime_human": self._format_uptime(uptime),
             "subscribers": len(self.state_manager.subscribers),
@@ -80,6 +85,12 @@ class HealthServer:
                 "total_losses": trade_stats.get('losses', 0),
                 "total_be": trade_stats.get('break_evens', 0),
                 "win_rate": trade_stats.get('win_rate', 0),
+            },
+            "today": {
+                "signals": today_stats.get('total', 0),
+                "wins": today_stats.get('wins', 0),
+                "losses": today_stats.get('losses', 0),
+                "win_rate": today_stats.get('win_rate', 0),
             },
             "signals": signal_stats,
             "strategy": {
@@ -107,7 +118,7 @@ class HealthServer:
         else:
             return f"{minutes}m"
     
-    async def start(self):
+    async def start(self) -> Optional[web.AppRunner]:
         app = web.Application()
         app.router.add_get('/health', self.health_handler)
         app.router.add_get('/', self.health_handler)
@@ -119,13 +130,13 @@ class HealthServer:
         logger.info(f"Health server started on port {BotConfig.PORT}")
         return self.runner
     
-    async def cleanup(self):
+    async def cleanup(self) -> None:
         if self.runner:
             await self.runner.cleanup()
+            logger.info("Health server cleaned up")
 
 
-async def self_ping_loop():
-    from aiohttp import ClientTimeout
+async def self_ping_loop() -> None:
     await asyncio.sleep(30)
     interval = BotConfig.KEEP_ALIVE_INTERVAL
     timeout = ClientTimeout(total=10)
@@ -140,7 +151,18 @@ async def self_ping_loop():
                         data = await resp.json()
                         memory = data.get('memory_mb', 0)
                         subs = data.get('subscribers', 0)
-                        logger.debug(f"Keep-alive OK (mem: {memory}MB, subs: {subs})")
+                        today = data.get('today', {})
+                        logger.debug(f"Keep-alive OK (mem: {memory}MB, subs: {subs}, today: {today.get('signals', 0)} signals)")
+                    else:
+                        logger.warning(f"Keep-alive returned status {resp.status}")
+            except asyncio.CancelledError:
+                logger.info("Keep-alive loop cancelled")
+                break
             except Exception as e:
                 logger.warning(f"Keep-alive ping failed: {e}")
-            await asyncio.sleep(interval)
+            
+            try:
+                await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                logger.info("Keep-alive loop cancelled during sleep")
+                break

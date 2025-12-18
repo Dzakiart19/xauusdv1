@@ -1,23 +1,62 @@
+import asyncio
 import datetime
 import os
 import logging
+from typing import Optional, TYPE_CHECKING
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.error import TelegramError
+from telegram.error import TelegramError, RetryAfter, TimedOut
 from telegram.ext import ContextTypes
 
 from config import BotConfig
 from utils import format_pnl, get_win_rate_emoji, calculate_win_rate
+
+if TYPE_CHECKING:
+    from state_manager import StateManager
 
 
 logger = logging.getLogger("TelegramService")
 
 
 class TelegramService:
-    def __init__(self, state_manager, deriv_ws_getter, gold_symbol_getter):
+    def __init__(self, state_manager: 'StateManager', deriv_ws_getter, gold_symbol_getter):
         self.state_manager = state_manager
         self.deriv_ws_getter = deriv_ws_getter
         self.gold_symbol_getter = gold_symbol_getter
+        self._rate_limit_lock = asyncio.Lock()
+        self._last_send_time = 0.0
+    
+    async def _rate_limited_send(self, coro):
+        async with self._rate_limit_lock:
+            now = asyncio.get_event_loop().time()
+            time_since_last = now - self._last_send_time
+            if time_since_last < BotConfig.TELEGRAM_RATE_LIMIT_DELAY:
+                await asyncio.sleep(BotConfig.TELEGRAM_RATE_LIMIT_DELAY - time_since_last)
+            self._last_send_time = asyncio.get_event_loop().time()
+            return await coro
+    
+    async def _safe_send(self, coro, retries: int = 3):
+        for attempt in range(retries):
+            try:
+                return await self._rate_limited_send(coro)
+            except RetryAfter as e:
+                retry_after = e.retry_after if isinstance(e.retry_after, (int, float)) else 5
+                wait_time = retry_after + 1
+                logger.warning(f"Rate limited, waiting {wait_time}s")
+                await asyncio.sleep(wait_time)
+            except TimedOut:
+                if attempt < retries - 1:
+                    await asyncio.sleep(1)
+                    continue
+                raise
+            except TelegramError as e:
+                if "blocked" in str(e).lower() or "not found" in str(e).lower():
+                    raise
+                if attempt < retries - 1:
+                    await asyncio.sleep(1)
+                    continue
+                raise
+        return None
     
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message:
@@ -39,9 +78,10 @@ class TelegramService:
         status = "✅ AKTIF" if subscribed else "❌ TIDAK AKTIF"
         
         await update.message.reply_text(
-            f"🏆 *Bot Sinyal XAU/USD V1.2*\n"
+            f"🏆 *Bot Sinyal XAU/USD V2.0 Pro*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"🌐 Data real-time dari Deriv WebSocket\n\n"
+            f"🌐 Data real-time dari Deriv WebSocket\n"
+            f"📡 Strategi: EMA50 + RSI3 + ADX55\n\n"
             f"📋 Status Langganan: *{status}*\n\n"
             f"📌 *Menu Perintah:*\n"
             f"├ /subscribe - Mulai berlangganan\n"
@@ -49,9 +89,10 @@ class TelegramService:
             f"├ /dashboard - Lihat posisi aktif\n"
             f"├ /signal - Lihat sinyal terakhir\n"
             f"├ /stats - Statistik trading Anda\n"
+            f"├ /today - Statistik hari ini\n"
             f"├ /riset - Reset data trading Anda\n"
             f"└ /info - Info sistem\n\n"
-            f"💡 Bot ini aktif 24 jam mencari sinyal terbaik untuk Anda!",
+            f"💡 Bot ini aktif 24 jam mencari sinyal terbaik!",
             parse_mode='Markdown',
             reply_markup=reply_markup
         )
@@ -81,6 +122,7 @@ class TelegramService:
                 "📬 Anda akan menerima sinyal trading XAU/USD secara real-time.\n\n"
                 "💡 *Tips:*\n"
                 "├ Gunakan /dashboard untuk pantau posisi\n"
+                "├ Gunakan /today untuk statistik hari ini\n"
                 "└ Bot akan melacak posisi hingga TP/SL tercapai\n\n"
                 "🚀 Selamat trading!",
                 parse_mode='Markdown'
@@ -130,8 +172,26 @@ class TelegramService:
             f"❌ Kalah: *{loss_count}*\n"
             f"⚖️ Break Even: *{be_count}*\n\n"
             f"{rate_emoji} Win Rate: *{win_rate:.1f}%*\n\n"
-            f"💡 Gunakan /riset untuk reset statistik.\n"
+            f"💡 Gunakan /today untuk statistik hari ini.\n"
             f"🤖 Bot bekerja 24 jam untuk Anda!",
+            parse_mode='Markdown'
+        )
+    
+    async def today(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not update.message:
+            return
+        
+        today_stats = self.state_manager.get_today_stats()
+        
+        await update.message.reply_text(
+            f"📅 *Statistik Hari Ini*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📊 Total Sinyal: *{today_stats['total']}*\n\n"
+            f"✅ Menang: *{today_stats['wins']}*\n"
+            f"❌ Kalah: *{today_stats['losses']}*\n"
+            f"⚖️ Break Even: *{today_stats['break_evens']}*\n"
+            f"⏳ Pending: *{today_stats['pending']}*\n\n"
+            f"🎯 Win Rate: *{today_stats['win_rate']:.1f}%*",
             parse_mode='Markdown'
         )
     
@@ -171,17 +231,20 @@ class TelegramService:
         if not market_status['is_open']:
             market_info += f"\n   _{market_status['message']}_"
         
+        today_stats = self.state_manager.get_today_stats()
+        
         await update.message.reply_text(
-            f"⚙️ *Info Sistem Bot*\n"
+            f"⚙️ *Info Sistem Bot V2.0 Pro*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"📡 WebSocket: {status}\n"
             f"🏷️ Symbol: {gold_symbol or 'frxXAUUSD'}\n"
             f"💰 Harga Terakhir: {price_str}\n"
             f"👥 Total Subscriber: {subscriber_count}\n\n"
             f"{market_info}\n\n"
-            f"📊 Data Source: Deriv\n"
-            f"⏱️ Interval Analisis: ~10 detik\n"
-            f"🔄 Tracking: Aktif saat ada posisi\n\n"
+            f"📊 *Statistik Hari Ini:*\n"
+            f"├ Sinyal: {today_stats['total']}\n"
+            f"├ Win: {today_stats['wins']} | Loss: {today_stats['losses']}\n"
+            f"└ Win Rate: {today_stats['win_rate']:.1f}%\n\n"
             f"🤖 Bot berjalan 24 jam non-stop!",
             parse_mode='Markdown'
         )
@@ -228,7 +291,7 @@ class TelegramService:
             parse_mode='Markdown'
         )
     
-    async def send_dashboard(self, chat_id, bot):
+    async def send_dashboard(self, chat_id, bot) -> None:
         chat_id = str(chat_id)
         user_state = self.state_manager.get_user_state(chat_id)
         deriv_ws = self.deriv_ws_getter()
@@ -304,12 +367,12 @@ class TelegramService:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         try:
-            await bot.send_message(
+            await self._safe_send(bot.send_message(
                 chat_id=chat_id,
                 text=dashboard_text,
                 parse_mode='Markdown',
                 reply_markup=reply_markup
-            )
+            ))
         except Exception as e:
             logger.error(f"Failed to send dashboard: {e}")
     
@@ -399,9 +462,7 @@ class TelegramService:
                 parse_mode='Markdown'
             )
     
-    async def send_to_all_subscribers(self, bot, text, photo_path=None):
-        import asyncio
-        
+    async def send_to_all_subscribers(self, bot, text: str, photo_path: Optional[str] = None) -> None:
         photo_bytes = None
         if photo_path and os.path.exists(photo_path):
             try:
@@ -410,39 +471,53 @@ class TelegramService:
             except Exception as e:
                 logger.error(f"Failed to read photo {photo_path}: {e}")
         
-        async def send_to_one(chat_id, photo_data):
+        async def send_to_one(chat_id: str, photo_data: Optional[bytes]):
             try:
                 if photo_data:
                     import io
-                    await bot.send_photo(chat_id=chat_id, photo=io.BytesIO(photo_data), caption=text, parse_mode='Markdown')
+                    await self._safe_send(bot.send_photo(
+                        chat_id=chat_id, 
+                        photo=io.BytesIO(photo_data), 
+                        caption=text, 
+                        parse_mode='Markdown'
+                    ))
                 else:
-                    await bot.send_message(chat_id=chat_id, text=text, parse_mode='Markdown')
+                    await self._safe_send(bot.send_message(
+                        chat_id=chat_id, 
+                        text=text, 
+                        parse_mode='Markdown'
+                    ))
                 return (chat_id, True, None)
             except TelegramError as e:
+                error_str = str(e).lower()
                 logger.error(f"Failed to send to {chat_id}: {e}")
-                return (chat_id, False, str(e))
+                return (chat_id, False, error_str)
         
         subscribers_list = list(self.state_manager.subscribers.copy())
         
         if not subscribers_list:
             return
         
-        batch_size = 20
+        batch_size = BotConfig.TELEGRAM_BATCH_SIZE
         for i in range(0, len(subscribers_list), batch_size):
             batch = subscribers_list[i:i+batch_size]
-            results = await asyncio.gather(*[send_to_one(cid, photo_bytes) for cid in batch], return_exceptions=True)
+            results = await asyncio.gather(
+                *[send_to_one(cid, photo_bytes) for cid in batch], 
+                return_exceptions=True
+            )
             
             for result in results:
                 if isinstance(result, tuple):
                     chat_id, success, error = result
                     if not success and error:
-                        if "blocked" in error.lower() or "not found" in error.lower():
+                        if "blocked" in error or "not found" in error or "deactivated" in error:
                             self.state_manager.remove_subscriber(chat_id)
+                            logger.info(f"Removed inactive subscriber: {chat_id}")
             
             if i + batch_size < len(subscribers_list):
                 await asyncio.sleep(0.5)
     
-    async def send_tracking_update(self, bot, current_price, signal_info):
+    async def send_tracking_update(self, bot, current_price: float, signal_info: dict) -> None:
         if not signal_info:
             return
         
@@ -470,7 +545,7 @@ class TelegramService:
             f"💹 P&L: *{pnl_str}*"
         )
         
-        for chat_id in self.state_manager.subscribers.copy():
+        for chat_id in list(self.state_manager.subscribers):
             user_state = self.state_manager.get_user_state(chat_id)
             if not user_state.get('active_trade'):
                 continue
@@ -480,27 +555,52 @@ class TelegramService:
                 
                 if tracking_msg_id:
                     try:
-                        await bot.edit_message_text(
+                        await self._safe_send(bot.edit_message_text(
                             chat_id=chat_id,
                             message_id=tracking_msg_id,
                             text=tracking_text,
                             parse_mode='Markdown'
-                        )
-                    except:
-                        msg = await bot.send_message(
+                        ))
+                    except TelegramError:
+                        msg = await self._safe_send(bot.send_message(
                             chat_id=chat_id,
                             text=tracking_text,
                             parse_mode='Markdown'
-                        )
-                        user_state['tracking_message_id'] = msg.message_id
-                        self.state_manager.save_user_states()
+                        ))
+                        if msg:
+                            user_state['tracking_message_id'] = msg.message_id
+                            self.state_manager.save_user_states()
                 else:
-                    msg = await bot.send_message(
+                    msg = await self._safe_send(bot.send_message(
                         chat_id=chat_id,
                         text=tracking_text,
                         parse_mode='Markdown'
-                    )
-                    user_state['tracking_message_id'] = msg.message_id
-                    self.state_manager.save_user_states()
+                    ))
+                    if msg:
+                        user_state['tracking_message_id'] = msg.message_id
+                        self.state_manager.save_user_states()
             except TelegramError as e:
                 logger.error(f"Failed to send tracking to {chat_id}: {e}")
+    
+    async def send_daily_summary(self, bot) -> None:
+        today_stats = self.state_manager.get_today_stats()
+        trade_stats = self.state_manager.get_trade_stats()
+        
+        summary_text = (
+            f"📊 *RINGKASAN HARIAN*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📅 {datetime.datetime.now(BotConfig.WIB_TZ).strftime('%d %B %Y')}\n\n"
+            f"*Statistik Hari Ini:*\n"
+            f"├ Total Sinyal: {today_stats['total']}\n"
+            f"├ ✅ Win: {today_stats['wins']}\n"
+            f"├ ❌ Loss: {today_stats['losses']}\n"
+            f"├ ⚖️ Break Even: {today_stats['break_evens']}\n"
+            f"└ 🎯 Win Rate: {today_stats['win_rate']:.1f}%\n\n"
+            f"*Statistik Keseluruhan:*\n"
+            f"├ Total Trade: {trade_stats['total_trades']}\n"
+            f"└ Win Rate: {trade_stats['win_rate']:.1f}%\n\n"
+            f"💡 Tetap disiplin dan ikuti money management!"
+        )
+        
+        await self.send_to_all_subscribers(bot, summary_text)
+        logger.info("Daily summary sent to all subscribers")
