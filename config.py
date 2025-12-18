@@ -9,58 +9,44 @@ class BotConfig:
     GENERATE_CHARTS = os.environ.get('GENERATE_CHARTS', 'true').lower() == 'true'
     KEEP_ALIVE_INTERVAL = int(os.environ.get('KEEP_ALIVE_INTERVAL', 300))
     
-    STOCH_K = 8
-    STOCH_D = 3
-    STOCH_SMOOTH = 3
-    ATR_PERIOD = 14
-    ATR_MULTIPLIER = 1.8
-    RR_TP1 = 1.0
-    RR_TP2 = 1.5
-    ADX_FILTER_PERIOD = 14
-    ADX_FILTER_THRESHOLD = 15
-    MA_SHORT_PERIOD = 21
+    # NEW SCALPING STRATEGY - EMA 50, RSI 3, ADX 55
+    # EMA 50: Trend Direction Filter
     MA_MEDIUM_PERIOD = 50
-    RSI_PERIOD = 14
+    
+    # RSI 3: Entry Timing (more sensitive)
+    RSI_PERIOD = 3
     RSI_OVERBOUGHT = 70
     RSI_OVERSOLD = 30
-    MACD_FAST = 12
-    MACD_SLOW = 26
-    MACD_SIGNAL = 9
-    BB_LENGTH = 20
-    BB_MULT = 2
-    LOT_SIZE = 0.01
-    RISK_PER_TRADE_USD = 2.00
     
+    # ADX 55: Trend Strength Filter
+    ADX_FILTER_PERIOD = 55
+    ADX_FILTER_THRESHOLD = 30
+    
+    # Money Management: Fixed 3 USD target and stop loss
+    FIXED_SL_USD = 3.0
+    FIXED_TP_USD = 3.0
+    LOT_SIZE = 0.01
+    RISK_PER_TRADE_USD = 3.00
+    
+    # ATR for additional volatility context (kept for compatibility)
+    ATR_PERIOD = 14
+    
+    # Analysis settings
     ANALYSIS_INTERVAL = 30
     ANALYSIS_JITTER = 10
     
+    # Signal settings
     UNLIMITED_SIGNALS = True
-    MULTI_TIMEFRAME_ENABLED = True
-    MIN_INDICATOR_CONSENSUS = 2
     SIGNAL_COOLDOWN_SECONDS = 120
     
-    CHART_FILENAME = 'chart_v1.2.png'
+    # File names
+    CHART_FILENAME = 'chart_scalping.png'
     USER_STATES_FILENAME = 'user_states.json'
     SUBSCRIBERS_FILENAME = 'subscribers.json'
-    LOG_FILENAME = 'bot_v1.2.log'
+    LOG_FILENAME = 'bot_scalping.log'
     
+    # Timezone
     WIB_TZ = pytz.timezone('Asia/Jakarta')
-    
-    @classmethod
-    def get_stoch_k_col(cls):
-        return f'STOCHk_{cls.STOCH_K}_{cls.STOCH_D}_{cls.STOCH_SMOOTH}'
-    
-    @classmethod
-    def get_stoch_d_col(cls):
-        return f'STOCHd_{cls.STOCH_K}_{cls.STOCH_D}_{cls.STOCH_SMOOTH}'
-    
-    @classmethod
-    def get_adx_col(cls):
-        return f'ADX_{cls.ADX_FILTER_PERIOD}'
-    
-    @classmethod
-    def get_ema_col(cls):
-        return f'EMA_{cls.MA_SHORT_PERIOD}'
     
     @classmethod
     def get_ema_medium_col(cls):
@@ -71,20 +57,12 @@ class BotConfig:
         return f'RSI_{cls.RSI_PERIOD}'
     
     @classmethod
+    def get_adx_col(cls):
+        return f'ADX_{cls.ADX_FILTER_PERIOD}'
+    
+    @classmethod
     def get_atr_col(cls):
         return f'ATRr_{cls.ATR_PERIOD}'
-    
-    @classmethod
-    def get_macd_cols(cls):
-        return (f'MACD_{cls.MACD_FAST}_{cls.MACD_SLOW}_{cls.MACD_SIGNAL}',
-                f'MACDh_{cls.MACD_FAST}_{cls.MACD_SLOW}_{cls.MACD_SIGNAL}',
-                f'MACDs_{cls.MACD_FAST}_{cls.MACD_SLOW}_{cls.MACD_SIGNAL}')
-    
-    @classmethod
-    def get_bb_cols(cls):
-        return (f'BBL_{cls.BB_LENGTH}_{cls.BB_MULT}',
-                f'BBM_{cls.BB_LENGTH}_{cls.BB_MULT}',
-                f'BBU_{cls.BB_LENGTH}_{cls.BB_MULT}')
     
     NY_TZ = pytz.timezone('America/New_York')
     MARKET_CLOSE_DAY = 4

@@ -332,7 +332,7 @@ class SignalEngine:
                         await asyncio.sleep(BotConfig.ANALYSIS_INTERVAL)
                         continue
                     
-                    bot_logger.info("🔍 Menganalisis data dari Deriv...")
+                    bot_logger.info("🔍 Menganalisis data dari Deriv (Scalping Strategy)...")
                     df = calculate_indicators(df)
                     latest = df.iloc[-2]
                     previous = df.iloc[-3]
@@ -340,73 +340,44 @@ class SignalEngine:
                     
                     bot_logger.info(f"💰 Data Terakhir XAU/USD: Close = {latest_close:.3f}")
                     
-                    stoch_k_col = BotConfig.get_stoch_k_col()
-                    stoch_d_col = BotConfig.get_stoch_d_col()
-                    adx_col = BotConfig.get_adx_col()
-                    ema_col = BotConfig.get_ema_col()
                     ema_med_col = BotConfig.get_ema_medium_col()
                     rsi_col = BotConfig.get_rsi_col()
-                    atr_col = BotConfig.get_atr_col()
-                    macd_col, macd_hist_col, macd_signal_col = BotConfig.get_macd_cols()
-                    bb_lower, bb_mid, bb_upper = BotConfig.get_bb_cols()
+                    adx_col = BotConfig.get_adx_col()
                     
-                    required_cols = [stoch_k_col, stoch_d_col, adx_col, ema_col, rsi_col, atr_col]
-                    if any(pd.isna(latest.get(col)) or pd.isna(previous.get(col)) for col in required_cols[:2]):
-                        bot_logger.warning("⚠️ Indicator NaN detected, waiting for more data...")
+                    required_cols = [ema_med_col, rsi_col, adx_col]
+                    if any(pd.isna(latest.get(col)) for col in required_cols):
+                        bot_logger.warning("⚠️ Core indicators NaN detected, waiting for more data...")
                         await asyncio.sleep(BotConfig.ANALYSIS_INTERVAL)
                         continue
                     
-                    is_stoch_buy = (previous[stoch_k_col] < previous[stoch_d_col] and latest[stoch_k_col] > latest[stoch_d_col])
-                    is_stoch_sell = (previous[stoch_k_col] > previous[stoch_d_col] and latest[stoch_k_col] < latest[stoch_d_col])
-                    
-                    adx_value = latest[adx_col]
-                    ma_value = latest[ema_col]
-                    ma_med_value = latest[ema_med_col] if ema_med_col in latest.index else None
+                    ema50_value = latest[ema_med_col]
                     rsi_value = latest[rsi_col]
-                    macd_value = latest[macd_col] if macd_col in latest.index else None
-                    macd_hist = latest[macd_hist_col] if macd_hist_col in latest.index else None
+                    adx_value = latest[adx_col]
                     
-                    if pd.isna(adx_value) or pd.isna(ma_value) or pd.isna(rsi_value):
-                        bot_logger.warning("⚠️ Core indicators NaN detected, waiting...")
+                    if pd.isna(ema50_value) or pd.isna(rsi_value) or pd.isna(adx_value):
+                        bot_logger.warning("⚠️ Invalid indicator values, waiting...")
                         await asyncio.sleep(BotConfig.ANALYSIS_INTERVAL)
                         continue
                     
-                    buy_confirmations = 0
-                    sell_confirmations = 0
+                    bot_logger.info(f"📊 Analysis: Price=${latest_close:.3f}, EMA50=${ema50_value:.3f}, RSI={rsi_value:.1f}, ADX={adx_value:.1f}")
                     
-                    if is_stoch_buy and latest_close > ma_value:
-                        buy_confirmations += 1
-                    if is_stoch_sell and latest_close < ma_value:
-                        sell_confirmations += 1
-                    
-                    if adx_value >= BotConfig.ADX_FILTER_THRESHOLD:
-                        buy_confirmations += 1
-                        sell_confirmations += 1
-                    
-                    if rsi_value < BotConfig.RSI_OVERBOUGHT:
-                        buy_confirmations += 0.5
-                    if rsi_value > BotConfig.RSI_OVERSOLD:
-                        sell_confirmations += 0.5
-                    
-                    if ma_med_value and latest_close > ma_med_value:
-                        buy_confirmations += 0.5
-                    if ma_med_value and latest_close < ma_med_value:
-                        sell_confirmations += 0.5
-                    
-                    if macd_hist and macd_hist > 0:
-                        buy_confirmations += 0.5
-                    if macd_hist and macd_hist < 0:
-                        sell_confirmations += 0.5
-                    
-                    bot_logger.info(f"📊 Analysis: Stoch={is_stoch_buy}/{is_stoch_sell}, ADX={adx_value:.1f}, RSI={rsi_value:.1f}, BuyCon={buy_confirmations:.1f}, SellCon={sell_confirmations:.1f}")
-                    
-                    min_consensus = BotConfig.MIN_INDICATOR_CONSENSUS
+                    # NEW SCALPING STRATEGY
+                    # 1. Trend Filter: EMA50
+                    # 2. Entry Signal: RSI oversold/overbought
+                    # 3. Strength Filter: ADX > 30
                     
                     final_signal = None
-                    if buy_confirmations >= min_consensus:
-                        final_signal = 'BUY'
-                    elif sell_confirmations >= min_consensus:
-                        final_signal = 'SELL'
+                    
+                    if adx_value < BotConfig.ADX_FILTER_THRESHOLD:
+                        bot_logger.info(f"❌ ADX too low ({adx_value:.1f} < {BotConfig.ADX_FILTER_THRESHOLD}), skip")
+                    elif latest_close > ema50_value:
+                        if rsi_value < BotConfig.RSI_OVERSOLD:
+                            bot_logger.info(f"🟢 BUY Signal: Price > EMA50, RSI Oversold ({rsi_value:.1f} < 30), ADX Strong ({adx_value:.1f})")
+                            final_signal = 'BUY'
+                    else:
+                        if rsi_value > BotConfig.RSI_OVERBOUGHT:
+                            bot_logger.info(f"🔴 SELL Signal: Price < EMA50, RSI Overbought ({rsi_value:.1f} > 70), ADX Strong ({adx_value:.1f})")
+                            final_signal = 'SELL'
                     
                     if final_signal and not self._can_generate_signal():
                         if self.last_signal_time is not None:
@@ -415,28 +386,20 @@ class SignalEngine:
                         final_signal = None
                     
                     if final_signal:
-                        bot_logger.info(f"🎯 Sinyal {final_signal} valid ditemukan!")
-                        
-                        latest_atr = latest[atr_col]
-                        if pd.isna(latest_atr) or latest_atr <= 0:
-                            bot_logger.warning("⚠️ ATR invalid, skipping signal...")
-                            await asyncio.sleep(BotConfig.ANALYSIS_INTERVAL)
-                            continue
+                        bot_logger.info(f"✅ Sinyal {final_signal} valid ditemukan!")
                         
                         if final_signal == "BUY":
-                            sl = latest_close - (latest_atr * BotConfig.ATR_MULTIPLIER)
-                            risk = abs(latest_close - sl)
-                            tp1 = latest_close + (risk * BotConfig.RR_TP1)
-                            tp2 = latest_close + (risk * BotConfig.RR_TP2)
+                            sl = latest_close - BotConfig.FIXED_SL_USD
+                            tp1 = latest_close + BotConfig.FIXED_TP_USD
+                            tp2 = latest_close + (BotConfig.FIXED_TP_USD * 1.5)
                             signal_emoji = "📈"
                         else:
-                            sl = latest_close + (latest_atr * BotConfig.ATR_MULTIPLIER)
-                            risk = abs(latest_close - sl)
-                            tp1 = latest_close - (risk * BotConfig.RR_TP1)
-                            tp2 = latest_close - (risk * BotConfig.RR_TP2)
+                            sl = latest_close + BotConfig.FIXED_SL_USD
+                            tp1 = latest_close - BotConfig.FIXED_TP_USD
+                            tp2 = latest_close - (BotConfig.FIXED_TP_USD * 1.5)
                             signal_emoji = "📉"
                         
-                        title = f"{signal_emoji} SINYAL {final_signal}"
+                        title = f"{signal_emoji} SCALPING {final_signal}"
                         start_time_utc = datetime.datetime.now(datetime.timezone.utc)
                         
                         temp_trade_info = {
@@ -450,20 +413,21 @@ class SignalEngine:
                         }
                         
                         caption = (
-                            f"{signal_emoji} *SINYAL {final_signal} XAU/USD*\n"
+                            f"{signal_emoji} *SCALPING {final_signal} XAU/USD*\n"
                             f"━━━━━━━━━━━━━━━━━━━━━\n"
-                            f"🌐 _Data: Deriv WebSocket_\n\n"
+                            f"🌐 _Strategi: EMA50 + RSI3 + ADX55_\n\n"
                             f"🕐 Waktu: *{start_time_utc.astimezone(BotConfig.WIB_TZ).strftime('%H:%M:%S WIB')}*\n"
                             f"💵 Entry: *${latest_close:.3f}*\n\n"
                             f"━━━━━━━━━━━━━━━━━━━━━\n"
-                            f"📋 *RENCANA EKSEKUSI*\n"
-                            f"📦 Lot: {BotConfig.LOT_SIZE}\n"
-                            f"💰 Risiko: ~${BotConfig.RISK_PER_TRADE_USD:.2f}\n\n"
+                            f"📋 *KONDISI ENTRY*\n"
+                            f"📊 EMA50: ${ema50_value:.3f}\n"
+                            f"📈 RSI(3): {rsi_value:.1f}\n"
+                            f"💪 ADX(55): {adx_value:.1f}\n\n"
                             f"━━━━━━━━━━━━━━━━━━━━━\n"
                             f"🎯 *TARGET & PROTEKSI*\n"
-                            f"🎯 TP1: *${tp1:.3f}*\n"
-                            f"🏆 TP2: *${tp2:.3f}*\n"
-                            f"🛑 SL: *${sl:.3f}*\n\n"
+                            f"🎯 TP1: *${tp1:.3f}* (+${abs(tp1-latest_close):.2f})\n"
+                            f"🏆 TP2: *${tp2:.3f}* (+${abs(tp2-latest_close):.2f})\n"
+                            f"🛑 SL: *${sl:.3f}* (-${abs(sl-latest_close):.2f})\n\n"
                             f"📡 Tracking aktif hingga TP/SL tercapai"
                         )
                         
@@ -499,9 +463,9 @@ class SignalEngine:
                                 rt_price = await self.get_realtime_price()
                                 if rt_price and self._has_telegram_service():
                                     await self.telegram_service.send_tracking_update(bot, rt_price, self.state_manager.current_signal)
-                                bot_logger.info("✅ Sinyal berhasil dikirim! Mode pelacakan aktif.")
+                                bot_logger.info("✅ Sinyal Scalping berhasil dikirim! Mode pelacakan aktif.")
                     else:
-                        bot_logger.info("🔍 Tidak ada sinyal valid saat ini. Terus mencari...")
+                        bot_logger.info("🔍 Belum ada kondisi entry scalping. Terus mencari...")
                 
                 if not self.state_manager.current_signal:
                     wait_time = BotConfig.ANALYSIS_INTERVAL + random.randint(-BotConfig.ANALYSIS_JITTER, BotConfig.ANALYSIS_JITTER)

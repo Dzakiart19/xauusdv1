@@ -14,7 +14,7 @@ class NoHttpxFilter(logging.Filter):
 
 
 def setup_logging():
-    bot_logger = logging.getLogger("BotV1.2")
+    bot_logger = logging.getLogger("BotScalping")
     bot_logger.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     
@@ -39,18 +39,19 @@ bot_logger = setup_logging()
 
 
 def calculate_indicators(df):
-    df.ta.stoch(k=BotConfig.STOCH_K, d=BotConfig.STOCH_D, smooth_k=BotConfig.STOCH_SMOOTH, append=True)
-    df.ta.atr(length=BotConfig.ATR_PERIOD, append=True)
-    df.ta.adx(length=BotConfig.ADX_FILTER_PERIOD, append=True)
-    df.ta.ema(length=BotConfig.MA_SHORT_PERIOD, append=True)
+    """Calculate only necessary indicators for scalping strategy"""
+    # EMA 50: Trend direction
     df.ta.ema(length=BotConfig.MA_MEDIUM_PERIOD, append=True)
+    # RSI 3: Entry timing (more sensitive)
     df.ta.rsi(length=BotConfig.RSI_PERIOD, append=True)
-    df.ta.macd(fast=BotConfig.MACD_FAST, slow=BotConfig.MACD_SLOW, signal=BotConfig.MACD_SIGNAL, append=True)
-    df.ta.bbands(length=BotConfig.BB_LENGTH, std=BotConfig.BB_MULT, append=True)
+    # ADX 55: Trend strength filter
+    df.ta.adx(length=BotConfig.ADX_FILTER_PERIOD, append=True)
+    # ATR: For context (optional)
+    df.ta.atr(length=BotConfig.ATR_PERIOD, append=True)
     return df
 
 
-async def generate_chart(df, trade_info=None, title="XAU/USD Chart"):
+async def generate_chart(df, trade_info=None, title="XAU/USD Scalping"):
     try:
         if len(df) < 50:
             bot_logger.warning("Not enough data for chart generation")
