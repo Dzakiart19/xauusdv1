@@ -50,17 +50,17 @@ dashboard_messages = {}
 tracking_message_ids = {}
 last_signal_info = {}
 
-CHART_FILENAME = 'chart_v31.png'
-STATE_FILENAME = 'bot_state_v31.json'
+CHART_FILENAME = 'chart_v1.2.png'
+STATE_FILENAME = 'bot_state_v1.2.json'
 SUBSCRIBERS_FILENAME = 'subscribers.json'
-LOG_FILENAME = 'bot_v31.log'
+LOG_FILENAME = 'bot_v1.2.log'
 wib_tz = pytz.timezone('Asia/Jakarta')
 
 class NoHttpxFilter(logging.Filter):
     def filter(self, record):
         return 'httpx' not in record.name and 'HTTP Request' not in record.getMessage()
 
-bot_logger = logging.getLogger("BotV31")
+bot_logger = logging.getLogger("BotV1.2")
 bot_logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
@@ -656,7 +656,7 @@ async def signal_engine_loop(bot):
     global active_trade, win_count, loss_count, be_count, deriv_ws, gold_symbol
     
     bot_logger.info("=" * 50)
-    bot_logger.info("🚀 Bot Sinyal V31 (Public Edition) dimulai!")
+    bot_logger.info("🚀 Bot Sinyal V1.2 (Public Edition) dimulai!")
     bot_logger.info("🌐 Sumber Data: Deriv WebSocket")
     bot_logger.info("🔄 Mode: 24 Jam Non-Stop")
     bot_logger.info("=" * 50)
@@ -1018,7 +1018,7 @@ async def main():
 
 if __name__ == '__main__':
     print("""
-🏆 XAU/USD Signal Bot V31 - Public Edition
+🏆 XAU/USD Signal Bot V1.2 - Public Edition
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🌐 Menggunakan Deriv WebSocket
 🔄 Mode: 24 Jam Non-Stop
