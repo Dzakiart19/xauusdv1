@@ -1,0 +1,139 @@
+
+
+Strategi Scalping Menggunakan EMA 50, RSI, dan ADX
+
+Strategi scalping ini menggunakan tiga indikator utama, yaitu:
+
+1. Exponential Moving Average (EMA) 50
+
+
+2. Relative Strength Index (RSI)
+
+
+3. Average Directional Index (ADX)
+
+
+
+Strategi ini difokuskan untuk entry cepat pada market yang sedang memiliki tren cukup kuat dan tidak disarankan digunakan pada kondisi sideways.
+
+
+---
+
+1. Exponential Moving Average (EMA 50)
+
+Fungsi: Menentukan arah tren utama market.
+
+Aturan Penggunaan:
+
+Jika harga berada di atas EMA 50, maka tren dianggap bullish → fokus BUY.
+
+Jika harga berada di bawah EMA 50, maka tren dianggap bearish → fokus SELL.
+
+
+EMA 50 digunakan sebagai filter tren utama. Selama harga masih berada di atas EMA 50, maka bias tetap BUY, dan sebaliknya.
+
+
+---
+
+2. Relative Strength Index (RSI)
+
+Fungsi: Menentukan momentum market dan area jenuh beli atau jenuh jual.
+
+Area Penting:
+
+Overbought: area jenuh beli → potensi SELL
+
+Oversold: area jenuh jual → potensi BUY
+
+
+Aturan Dasar:
+
+Jika RSI berada di area oversold, maka bersiap untuk BUY.
+
+Jika RSI berada di area overbought, maka bersiap untuk SELL.
+
+
+RSI digunakan sebagai timing entry, bukan penentu arah tren utama.
+
+
+---
+
+3. Average Directional Index (ADX)
+
+Fungsi: Mengukur kekuatan tren.
+
+Aturan Penggunaan:
+
+ADX > 30 → tren cukup kuat, boleh entry.
+
+ADX < 30 → tren lemah, tidak disarankan entry.
+
+
+ADX tidak menentukan BUY atau SELL, melainkan hanya sebagai filter apakah market layak ditradingkan atau tidak.
+
+
+---
+
+Setting Indikator (Disarankan)
+
+EMA: Periode 50 (default)
+
+RSI: Periode 3 (dimodifikasi agar lebih sensitif dan lebih sering masuk area overbought/oversold)
+
+ADX: Periode diubah dari default 14 menjadi 55 agar lebih akurat menyaring tren kuat
+
+
+
+---
+
+Syarat Entry Scalping
+
+Entry hanya dilakukan jika ketiga syarat berikut terpenuhi:
+
+1. Harga di atas EMA 50 → fokus BUY (atau harga di bawah EMA 50 → fokus SELL)
+
+
+2. RSI masuk area oversold (untuk BUY) atau overbought (untuk SELL)
+
+
+3. ADX berada di atas level 30
+
+
+
+Jika salah satu syarat tidak terpenuhi (terutama ADX di bawah 30), maka tidak melakukan entry.
+
+
+---
+
+Contoh Alur Entry BUY
+
+1. Harga berada di atas EMA 50 → bias BUY.
+
+
+2. Tunggu RSI turun hingga masuk area oversold.
+
+
+3. Pastikan ADX di atas 30.
+
+
+4. Entry BUY dilakukan saat RSI mulai naik kembali keluar dari area oversold, idealnya ketika RSI sudah kembali ke atas level ±23.
+
+
+
+Entry dilakukan setelah ada konfirmasi RSI keluar dari area jenuh, bukan saat RSI masih terlalu dalam di area oversold.
+
+
+---
+
+Money Management & Target
+
+Khusus untuk scalping di market emas (XAUUSD):
+
+Target umum: ±3 USD per posisi
+
+Risk : Reward: 1 : 1
+
+Contoh: SL 3 USD, TP 3 USD
+
+
+Setelah entry, langsung pasang Stop Loss (SL) dan Take Profit (TP).
