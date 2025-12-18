@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from aiohttp import web, ClientSession
 
 from config import BotConfig
@@ -13,15 +14,51 @@ class HealthServer:
         self.state_manager = state_manager
         self.deriv_ws_getter = deriv_ws_getter
         self.runner = None
+        self.start_time = time.time()
     
     async def health_handler(self, request):
         deriv_ws = self.deriv_ws_getter()
+        
+        ws_stats = {}
+        if deriv_ws and hasattr(deriv_ws, 'get_connection_stats'):
+            ws_stats = deriv_ws.get_connection_stats()
+        
+        uptime = time.time() - self.start_time
+        
+        trade_stats = self.state_manager.get_trade_stats()
+        
         return web.json_response({
             "status": "ok",
+            "uptime_seconds": round(uptime, 0),
+            "uptime_human": self._format_uptime(uptime),
             "subscribers": len(self.state_manager.subscribers),
-            "websocket_connected": deriv_ws.connected if deriv_ws else False,
-            "current_price": deriv_ws.get_current_price() if deriv_ws else None
+            "websocket": {
+                "connected": deriv_ws.connected if deriv_ws else False,
+                "current_price": deriv_ws.get_current_price() if deriv_ws else None,
+                **ws_stats
+            },
+            "trading": {
+                "active_signal": bool(self.state_manager.current_signal),
+                "total_wins": trade_stats.get('wins', 0),
+                "total_losses": trade_stats.get('losses', 0),
+                "total_be": trade_stats.get('break_evens', 0),
+            },
+            "config": {
+                "analysis_interval": BotConfig.ANALYSIS_INTERVAL,
+                "charts_enabled": BotConfig.GENERATE_CHARTS,
+            }
         })
+    
+    def _format_uptime(self, seconds: float) -> str:
+        days = int(seconds // 86400)
+        hours = int((seconds % 86400) // 3600)
+        minutes = int((seconds % 3600) // 60)
+        if days > 0:
+            return f"{days}d {hours}h {minutes}m"
+        elif hours > 0:
+            return f"{hours}h {minutes}m"
+        else:
+            return f"{minutes}m"
     
     async def start(self):
         app = web.Application()

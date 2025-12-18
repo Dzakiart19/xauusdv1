@@ -1,6 +1,8 @@
 import asyncio
 import json
 import logging
+import random
+import time
 from typing import Callable, Optional
 import websockets
 from collections import deque
@@ -18,6 +20,7 @@ class DerivWebSocket:
         self.current_price = None
         self.price_history = deque(maxlen=200)
         self.last_tick_time = None
+        self.last_tick_received = None
         self.reconnect_attempts = 0
         self.max_reconnect_attempts = 15
         self.base_reconnect_delay = 2
@@ -25,10 +28,24 @@ class DerivWebSocket:
         self.candles_response = None
         self.candles_event = asyncio.Event()
         self.listening = False
+        self.watchdog_timeout = 60
+        self.total_reconnects = 0
+        self.connection_start_time = None
+        self._watchdog_task = None
+        
+    def _get_jittered_delay(self, attempt: int) -> float:
+        base_delay = min(self.base_reconnect_delay * (2 ** attempt), self.max_reconnect_delay)
+        jitter = random.uniform(0, 0.3 * base_delay)
+        return base_delay + jitter
         
     async def connect(self):
         while self.reconnect_attempts < self.max_reconnect_attempts:
             try:
+                delay = self._get_jittered_delay(self.reconnect_attempts)
+                if self.reconnect_attempts > 0:
+                    logger.info(f"Waiting {delay:.1f}s before reconnect (jittered backoff)...")
+                    await asyncio.sleep(delay)
+                
                 logger.info(f"Connecting to Deriv WebSocket... (attempt {self.reconnect_attempts + 1})")
                 self.ws = await websockets.connect(
                     DERIV_WS_URL,
@@ -38,13 +55,19 @@ class DerivWebSocket:
                 )
                 self.connected = True
                 self.reconnect_attempts = 0
-                logger.info("Connected to Deriv WebSocket successfully")
+                self.connection_start_time = time.time()
+                self.last_tick_received = time.time()
+                
+                if self.total_reconnects > 0:
+                    logger.info(f"Reconnected to Deriv WebSocket (total reconnects: {self.total_reconnects})")
+                else:
+                    logger.info("Connected to Deriv WebSocket successfully")
+                
+                self.total_reconnects += 1
                 return True
             except Exception as e:
                 self.reconnect_attempts += 1
-                delay = min(self.base_reconnect_delay * (2 ** self.reconnect_attempts), self.max_reconnect_delay)
-                logger.error(f"Connection failed: {e}. Retrying in {delay}s... (exponential backoff)")
-                await asyncio.sleep(delay)
+                logger.error(f"Connection failed: {e}. (attempt {self.reconnect_attempts}/{self.max_reconnect_attempts})")
         
         logger.critical("Max reconnection attempts reached")
         return False
@@ -123,6 +146,41 @@ class DerivWebSocket:
             logger.error(f"Failed to get active symbols: {e}")
             return None
 
+    async def _watchdog(self):
+        while self.connected:
+            await asyncio.sleep(self.watchdog_timeout / 2)
+            
+            if not self.connected:
+                break
+                
+            if self.last_tick_received:
+                time_since_tick = time.time() - self.last_tick_received
+                if time_since_tick > self.watchdog_timeout:
+                    logger.warning(f"Watchdog: No tick for {time_since_tick:.0f}s, connection may be stale")
+                    try:
+                        pong_received = await self.send_ping()
+                        if not pong_received:
+                            logger.error("Watchdog: Ping failed, marking connection as dead")
+                            self.connected = False
+                            break
+                        else:
+                            logger.info("Watchdog: Ping succeeded, connection alive")
+                    except Exception as e:
+                        logger.error(f"Watchdog: Error during ping: {e}")
+                        self.connected = False
+                        break
+
+    def start_watchdog(self):
+        if self._watchdog_task and not self._watchdog_task.done():
+            self._watchdog_task.cancel()
+        self._watchdog_task = asyncio.create_task(self._watchdog())
+        logger.info("Watchdog timer started")
+
+    def stop_watchdog(self):
+        if self._watchdog_task:
+            self._watchdog_task.cancel()
+            self._watchdog_task = None
+
     async def listen(self):
         if not self.ws:
             return
@@ -132,6 +190,7 @@ class DerivWebSocket:
             return
         
         self.listening = True
+        self.start_watchdog()
         
         try:
             async for message in self.ws:
@@ -141,6 +200,7 @@ class DerivWebSocket:
                     tick = data["tick"]
                     self.current_price = float(tick["quote"])
                     self.last_tick_time = tick["epoch"]
+                    self.last_tick_received = time.time()
                     
                     tick_data = {
                         "price": self.current_price,
@@ -156,6 +216,9 @@ class DerivWebSocket:
                     self.candles_response = data
                     self.candles_event.set()
                 
+                elif "pong" in data:
+                    logger.debug("Pong received from server")
+                
                 elif "error" in data:
                     logger.error(f"WebSocket error: {data['error']['message']}")
                     
@@ -169,6 +232,7 @@ class DerivWebSocket:
             self.connected = False
         finally:
             self.listening = False
+            self.stop_watchdog()
 
     async def send_ping(self):
         if self.ws and self.connected:
@@ -180,6 +244,7 @@ class DerivWebSocket:
         return False
 
     async def close(self):
+        self.stop_watchdog()
         if self.ws:
             await self.ws.close()
             self.connected = False
@@ -191,6 +256,20 @@ class DerivWebSocket:
 
     def get_price_history(self) -> list:
         return list(self.price_history)
+
+    def get_connection_stats(self) -> dict:
+        uptime = 0
+        if self.connection_start_time:
+            uptime = time.time() - self.connection_start_time
+        
+        return {
+            "connected": self.connected,
+            "uptime_seconds": uptime,
+            "total_reconnects": self.total_reconnects,
+            "current_price": self.current_price,
+            "last_tick_time": self.last_tick_time,
+            "price_history_size": len(self.price_history)
+        }
 
 
 async def find_gold_symbol():
@@ -233,6 +312,9 @@ if __name__ == "__main__":
                 print(f"Got {len(candles)} candles")
                 for c in list(candles)[-3:]:
                     print(f"  Close: {c['close']}")
+            
+            print("\nConnection stats:")
+            print(ws.get_connection_stats())
             
             await asyncio.sleep(5)
             listen_task.cancel()

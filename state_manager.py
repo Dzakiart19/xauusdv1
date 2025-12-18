@@ -143,3 +143,25 @@ class StateManager:
     def update_last_signal_info(self, info):
         self.last_signal_info.clear()
         self.last_signal_info.update(info)
+    
+    def get_trade_stats(self) -> dict:
+        total_wins = 0
+        total_losses = 0
+        total_be = 0
+        
+        for chat_id in self.subscribers:
+            us = self.get_user_state(chat_id)
+            total_wins += us.get('win_count', 0)
+            total_losses += us.get('loss_count', 0)
+            total_be += us.get('be_count', 0)
+        
+        total_trades = total_wins + total_losses + total_be
+        win_rate = (total_wins / total_trades * 100) if total_trades > 0 else 0
+        
+        return {
+            'wins': total_wins,
+            'losses': total_losses,
+            'break_evens': total_be,
+            'total_trades': total_trades,
+            'win_rate': round(win_rate, 1)
+        }
