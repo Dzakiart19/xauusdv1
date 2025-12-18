@@ -229,9 +229,9 @@ if __name__ == "__main__":
             
             print("\nGetting candles...")
             candles = await ws.get_candles("frxXAUUSD", count=10)
-            if candles:
+            if candles and isinstance(candles, list):
                 print(f"Got {len(candles)} candles")
-                for c in candles[-3:]:
+                for c in list(candles)[-3:]:
                     print(f"  Close: {c['close']}")
             
             await asyncio.sleep(5)

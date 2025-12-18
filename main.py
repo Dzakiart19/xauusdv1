@@ -186,7 +186,7 @@ async def subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "📬 Anda akan menerima sinyal trading XAU/USD secara real-time.\n\n"
             "💡 *Tips:*\n"
             "├ Gunakan /dashboard untuk pantau posisi\n"
-            "└ Bot akan mengirim update setiap 5 detik saat ada trade aktif\n\n"
+            "└ Bot akan melacak posisi hingga TP/SL tercapai\n\n"
             "🚀 Selamat trading!",
             parse_mode='Markdown'
         )
@@ -256,7 +256,7 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         f"👥 Total Subscriber: {subscriber_count}\n\n"
         f"📊 Data Source: Deriv\n"
         f"⏱️ Interval Analisis: ~10 detik\n"
-        f"🔄 Update Tracking: 5 detik\n\n"
+        f"🔄 Tracking: Aktif saat ada posisi\n\n"
         f"🤖 Bot berjalan 24 jam non-stop!",
         parse_mode='Markdown'
     )
@@ -452,10 +452,8 @@ async def get_historical_data():
     global deriv_ws, gold_symbol
     
     if not deriv_ws or not deriv_ws.connected:
-        bot_logger.warning("WebSocket not connected, attempting reconnect...")
-        deriv_ws = DerivWebSocket()
-        if not await deriv_ws.connect():
-            return None
+        bot_logger.warning("WebSocket not connected, skipping data fetch...")
+        return None
     
     try:
         symbol = gold_symbol or "frxXAUUSD"
@@ -555,7 +553,7 @@ async def send_tracking_update(bot, current_price):
         f"🎯 Jarak TP1: {distance_tp1:.3f}\n"
         f"🏆 Jarak TP2: {distance_tp2:.3f}\n"
         f"🛑 Jarak SL: {distance_sl:.3f}\n\n"
-        f"🔄 Update setiap 5 detik"
+        f"📡 Tracking aktif"
     )
     
     for chat_id in subscribers.copy():
@@ -685,6 +683,9 @@ async def signal_engine_loop(bot):
                         f"SL: {active_trade['sl_level']:.3f}"
                     )
                     
+                    if i == 0 or i == 5:
+                        await send_tracking_update(bot, current_price)
+                    
                     result_info = {}
                     trade_status = active_trade['status']
                     
@@ -813,13 +814,28 @@ async def signal_engine_loop(bot):
                 
                 stoch_k_col = f'STOCHk_{STOCH_K}_{STOCH_D}_{STOCH_SMOOTH}'
                 stoch_d_col = f'STOCHd_{STOCH_K}_{STOCH_D}_{STOCH_SMOOTH}'
+                adx_col = f'ADX_{ADX_FILTER_PERIOD}'
+                ema_col = f'EMA_{MA_SHORT_PERIOD}'
+                rsi_col = f'RSI_{RSI_PERIOD}'
+                atr_col = f'ATRr_{ATR_PERIOD}'
+                
+                required_cols = [stoch_k_col, stoch_d_col, adx_col, ema_col, rsi_col, atr_col]
+                if any(pd.isna(latest.get(col)) or pd.isna(previous.get(col)) for col in required_cols[:2]):
+                    bot_logger.warning("⚠️ Indicator NaN detected, waiting for more data...")
+                    await asyncio.sleep(ANALYSIS_INTERVAL)
+                    continue
                 
                 is_buy = (previous[stoch_k_col] < previous[stoch_d_col] and latest[stoch_k_col] > latest[stoch_d_col])
                 is_sell = (previous[stoch_k_col] > previous[stoch_d_col] and latest[stoch_k_col] < latest[stoch_d_col])
                 
-                adx_value = latest[f'ADX_{ADX_FILTER_PERIOD}']
-                ma_value = latest[f'EMA_{MA_SHORT_PERIOD}']
-                rsi_value = latest[f'RSI_{RSI_PERIOD}']
+                adx_value = latest[adx_col]
+                ma_value = latest[ema_col]
+                rsi_value = latest[rsi_col]
+                
+                if pd.isna(adx_value) or pd.isna(ma_value) or pd.isna(rsi_value):
+                    bot_logger.warning("⚠️ ADX/EMA/RSI NaN detected, skipping...")
+                    await asyncio.sleep(ANALYSIS_INTERVAL)
+                    continue
                 
                 bot_logger.info(f"📊 Data Sinyal: StochBuy={is_buy}, StochSell={is_sell}, ADX={adx_value:.2f}, EMA={ma_value:.2f}, RSI={rsi_value:.2f}")
                 
@@ -833,7 +849,11 @@ async def signal_engine_loop(bot):
                 if final_signal:
                     bot_logger.info(f"🎯 Sinyal {final_signal} valid ditemukan!")
                     
-                    latest_atr = latest[f'ATRr_{ATR_PERIOD}']
+                    latest_atr = latest[atr_col]
+                    if pd.isna(latest_atr) or latest_atr <= 0:
+                        bot_logger.warning("⚠️ ATR invalid, skipping signal...")
+                        await asyncio.sleep(ANALYSIS_INTERVAL)
+                        continue
                     
                     if final_signal == "BUY":
                         sl = latest_close - (latest_atr * ATR_MULTIPLIER)
@@ -876,7 +896,7 @@ async def signal_engine_loop(bot):
                         f"🎯 TP1: *${tp1:.3f}*\n"
                         f"🏆 TP2: *${tp2:.3f}*\n"
                         f"🛑 SL: *${sl:.3f}*\n\n"
-                        f"🔄 Update posisi setiap 5 detik"
+                        f"📡 Tracking aktif hingga TP/SL tercapai"
                     )
                     
                     if await generate_chart(df, temp_trade_info, title):
@@ -952,7 +972,7 @@ if __name__ == '__main__':
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🌐 Menggunakan Deriv WebSocket
 🔄 Mode: 24 Jam Non-Stop
-📊 Update Tracking: Setiap 5 Detik
+📡 Tracking: Aktif saat ada posisi
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     """)
     try:
