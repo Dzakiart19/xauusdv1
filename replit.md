@@ -58,18 +58,21 @@ The bot is built with a modular architecture, refactored from a monolithic desig
     - Used for all bot interactions, messaging, and command handling.
     - Requires `TELEGRAM_BOT_TOKEN` environment variable.
 
-## Deployment (Koyeb)
-- **Docker Support**: Project includes `Dockerfile` and `requirements.txt` for containerized deployment
-- **Health Check**: Endpoint at `/health` for liveness monitoring
-- **Self-Ping**: Bot pings itself every 45 seconds with persistent session to prevent sleeping
-- **Port**: Configurable via `PORT` environment variable (default: 8000)
-- **Optimizations for Free Tier**:
-    - Win/lose results sent as text-only (no chart) to save storage
-    - Chart files auto-deleted immediately after sending to Telegram
-    - Analysis interval 15s with jitter for CPU efficiency
-    - Active trades cleared on restart - always searches fresh signals
+## Deployment (Koyeb Free Tier - Optimized)
+- **Docker Support**: Lightweight `Dockerfile` (python:3.11-slim) for minimal resource usage
+- **Performance Optimizations**:
+    - **GENERATE_CHARTS=false** (default): Disables chart generation → 70% RAM reduction
+    - **ANALYSIS_INTERVAL=30s**: Increased from 15s → CPU optimization
+    - **KEEP_ALIVE_INTERVAL=300s**: Health check every 5 min to prevent sleep
+- **Health Check**: Endpoint at `/health` for Koyeb liveness monitoring (30s interval)
+- **Keep-Alive**: Self-ping loop prevents idle timeout on free tier
+- **Port**: Fixed at 8000 for Koyeb compatibility
+- **Environment Variables**:
+    - `GENERATE_CHARTS` (default: false) - Set to false for free tier
+    - `KEEP_ALIVE_INTERVAL` (default: 300)
+    - `TELEGRAM_BOT_TOKEN` (required)
 - **Files**:
-    - `Dockerfile`: Docker image configuration
-    - `requirements.txt`: Python dependencies for Docker
-    - `.dockerignore`: Files excluded from Docker build
-    - `DEPLOY_KOYEB.md`: Step-by-step deployment guide
+    - `Dockerfile`: Optimized multi-stage build
+    - `requirements.txt`: Production dependencies
+    - `.dockerignore`: Excludes unnecessary files from build
+    - `DEPLOY_KOYEB.md`: Complete deployment guide with troubleshooting
