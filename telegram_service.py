@@ -70,7 +70,8 @@ class TelegramService:
              InlineKeyboardButton("📤 Unsubscribe", callback_data="unsubscribe")],
             [InlineKeyboardButton("📊 Dashboard", callback_data="dashboard"),
              InlineKeyboardButton("📈 Stats", callback_data="stats")],
-            [InlineKeyboardButton("🔄 Reset Data", callback_data="riset")]
+            [InlineKeyboardButton("🔄 Reset Data", callback_data="riset"),
+             InlineKeyboardButton("🚀 Send Signal", callback_data="send_signal")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -81,7 +82,7 @@ class TelegramService:
             f"🏆 *Bot Sinyal XAU/USD V2.0 Pro*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"🌐 Data real-time dari Deriv WebSocket\n"
-            f"📡 Strategi: EMA50 + RSI3 + ADX55\n\n"
+            f"📡 Strategi: EMA50 + RSI5 + ADX55\n\n"
             f"📋 Status Langganan: *{status}*\n\n"
             f"📌 *Menu Perintah:*\n"
             f"├ /subscribe - Mulai berlangganan\n"
@@ -90,6 +91,7 @@ class TelegramService:
             f"├ /signal - Lihat sinyal terakhir\n"
             f"├ /stats - Statistik trading Anda\n"
             f"├ /today - Statistik hari ini\n"
+            f"├ /send - Generate signal manual sekarang\n"
             f"├ /riset - Reset data trading Anda\n"
             f"└ /info - Info sistem\n\n"
             f"💡 Bot ini aktif 24 jam mencari sinyal terbaik!",

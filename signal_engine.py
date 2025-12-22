@@ -74,31 +74,41 @@ class SignalEngine:
             bot_logger.warning("WebSocket not connected, skipping data fetch...")
             return None
         
-        try:
-            symbol = self.gold_symbol or "frxXAUUSD"
-            candles = await self.deriv_ws.get_candles(symbol=symbol, count=200, granularity=60)
-            
-            if not candles or not isinstance(candles, list):
-                bot_logger.warning("No candle data received")
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                symbol = self.gold_symbol or "frxXAUUSD"
+                candles = await self.deriv_ws.get_candles(symbol=symbol, count=200, granularity=60)
+                
+                if not candles or not isinstance(candles, list):
+                    if attempt < max_retries - 1:
+                        bot_logger.warning(f"No candle data (attempt {attempt+1}/{max_retries}), retrying...")
+                        await asyncio.sleep(2)
+                        continue
+                    bot_logger.warning("No candle data received after retries")
+                    return None
+                
+                df_data = []
+                for c in candles:
+                    df_data.append({
+                        'date': datetime.datetime.fromtimestamp(c['epoch'], tz=datetime.timezone.utc),
+                        'Open': float(c['open']),
+                        'High': float(c['high']),
+                        'Low': float(c['low']),
+                        'Close': float(c['close'])
+                    })
+                
+                df = pd.DataFrame(df_data)
+                df.set_index('date', inplace=True)
+                return df
+                
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    bot_logger.warning(f"DATA-ERROR (attempt {attempt+1}/{max_retries}): {e}, retrying...")
+                    await asyncio.sleep(2)
+                    continue
+                bot_logger.error(f"DATA-ERROR: Failed after {max_retries} attempts: {e}")
                 return None
-            
-            df_data = []
-            for c in candles:
-                df_data.append({
-                    'date': datetime.datetime.fromtimestamp(c['epoch'], tz=datetime.timezone.utc),
-                    'Open': float(c['open']),
-                    'High': float(c['high']),
-                    'Low': float(c['low']),
-                    'Close': float(c['close'])
-                })
-            
-            df = pd.DataFrame(df_data)
-            df.set_index('date', inplace=True)
-            return df
-            
-        except Exception as e:
-            bot_logger.error(f"DATA-ERROR: {e}")
-            return None
     
     async def get_realtime_price(self) -> Optional[float]:
         if self.deriv_ws and self.deriv_ws.connected:
