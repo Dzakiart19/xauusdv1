@@ -82,8 +82,9 @@ class SignalEngine:
                 
                 if not candles or not isinstance(candles, list):
                     if attempt < max_retries - 1:
-                        bot_logger.warning(f"No candle data (attempt {attempt+1}/{max_retries}), retrying...")
-                        await asyncio.sleep(2)
+                        delay = 10 + (10 * attempt)
+                        bot_logger.warning(f"No candle data (attempt {attempt+1}/{max_retries}), waiting {delay}s...")
+                        await asyncio.sleep(delay)
                         continue
                     bot_logger.warning("No candle data received after retries")
                     return None
@@ -104,8 +105,9 @@ class SignalEngine:
                 
             except Exception as e:
                 if attempt < max_retries - 1:
-                    bot_logger.warning(f"DATA-ERROR (attempt {attempt+1}/{max_retries}): {e}, retrying...")
-                    await asyncio.sleep(2)
+                    delay = 10 + (10 * attempt)
+                    bot_logger.warning(f"DATA-ERROR (attempt {attempt+1}/{max_retries}): {e}, waiting {delay}s...")
+                    await asyncio.sleep(delay)
                     continue
                 bot_logger.error(f"DATA-ERROR: Failed after {max_retries} attempts: {e}")
                 return None
@@ -487,8 +489,8 @@ class SignalEngine:
                     df = await self.get_historical_data()
                     
                     if df is None:
-                        wait_time = BotConfig.ANALYSIS_INTERVAL + random.randint(10, 20)
-                        bot_logger.info(f"⏳ Failed to fetch data, waiting {wait_time}s before retry...")
+                        wait_time = 60 + random.randint(30, 60)
+                        bot_logger.warning(f"⏳ Failed to fetch data, long cooldown {wait_time}s before retry...")
                         await asyncio.sleep(wait_time)
                         continue
                     
