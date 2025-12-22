@@ -352,19 +352,6 @@ class SignalEngine:
                     tracking_counter += 1
                     trade_closed = False
                     
-                    # Check if any subscriber has active_trade
-                    has_active_users = any(
-                        self.state_manager.get_user_state(cid).get('active_trade')
-                        for cid in self.state_manager.subscribers
-                    )
-                    
-                    if not has_active_users:
-                        # No active users, clear signal and search for new one
-                        bot_logger.info("⏸️ Tidak ada subscriber dengan active trade, mencari sinyal baru...")
-                        self.state_manager.clear_current_signal()
-                        await asyncio.sleep(10)
-                        continue
-                    
                     rt_price = await self.get_realtime_price()
                     if rt_price:
                         direction = current_signal['direction']
