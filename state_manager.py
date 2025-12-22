@@ -117,13 +117,8 @@ class StateManager:
         
         self.save_user_states()
         
-        # Clear global signal if no subscribers have active trades
-        has_active_users = any(
-            self.get_user_state(cid).get('active_trade')
-            for cid in self.subscribers
-        )
-        if not has_active_users:
-            self.clear_current_signal()
+        # ALWAYS clear global signal on reset to stop tracking immediately
+        self.clear_current_signal()
         
         return old_stats
     
