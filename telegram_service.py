@@ -26,37 +26,18 @@ class TelegramService:
         self._rate_limit_lock = asyncio.Lock()
         self._last_send_time = 0.0
     
-    async def _rate_limited_send(self, coro):
-        async with self._rate_limit_lock:
-            now = asyncio.get_event_loop().time()
-            time_since_last = now - self._last_send_time
-            if time_since_last < BotConfig.TELEGRAM_RATE_LIMIT_DELAY:
-                await asyncio.sleep(BotConfig.TELEGRAM_RATE_LIMIT_DELAY - time_since_last)
-            self._last_send_time = asyncio.get_event_loop().time()
-            return await coro
-    
-    async def _safe_send(self, coro, retries: int = 3):
-        for attempt in range(retries):
-            try:
-                return await self._rate_limited_send(coro)
-            except RetryAfter as e:
-                retry_after = e.retry_after if isinstance(e.retry_after, (int, float)) else 5
-                wait_time = retry_after + 1
-                logger.warning(f"Rate limited, waiting {wait_time}s")
-                await asyncio.sleep(wait_time)
-            except TimedOut:
-                if attempt < retries - 1:
-                    await asyncio.sleep(1)
-                    continue
-                raise
-            except TelegramError as e:
-                if "blocked" in str(e).lower() or "not found" in str(e).lower():
-                    raise
-                if attempt < retries - 1:
-                    await asyncio.sleep(1)
-                    continue
-                raise
-        return None
+    async def _safe_send(self, coro):
+        try:
+            async with self._rate_limit_lock:
+                now = asyncio.get_event_loop().time()
+                time_since_last = now - self._last_send_time
+                if time_since_last < BotConfig.TELEGRAM_RATE_LIMIT_DELAY:
+                    await asyncio.sleep(BotConfig.TELEGRAM_RATE_LIMIT_DELAY - time_since_last)
+                self._last_send_time = asyncio.get_event_loop().time()
+                return await coro
+        except (RetryAfter, TimedOut, TelegramError) as e:
+            logger.error(f"Failed to send message: {e}")
+            return None
     
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message:
