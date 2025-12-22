@@ -8,7 +8,7 @@ from typing import Optional, TYPE_CHECKING
 
 from config import BotConfig
 from utils import calculate_indicators, generate_chart, bot_logger
-from deriv_ws import DerivWebSocket, find_gold_symbol
+from deriv_ws import DerivWebSocket
 
 if TYPE_CHECKING:
     from telegram_service import TelegramService
@@ -138,28 +138,35 @@ class SignalEngine:
         self._running = True
         self._shutdown_event.clear()
         
-        gold_symbols = await find_gold_symbol()
-        if gold_symbols:
-            for s in gold_symbols:
-                if s.get('symbol') == 'frxXAUUSD':
-                    self.gold_symbol = 'frxXAUUSD'
-                    break
-            else:
-                self.gold_symbol = gold_symbols[0].get('symbol', 'frxXAUUSD')
+        self.gold_symbol = 'frxXAUUSD'
         bot_logger.info(f"Using gold symbol: {self.gold_symbol}")
         
         self.deriv_ws = DerivWebSocket()
         
-        connected = await self.deriv_ws.connect()
-        if not connected:
-            bot_logger.critical("Failed to connect to Deriv WebSocket!")
+        max_connect_attempts = 3
+        for attempt in range(max_connect_attempts):
+            try:
+                connected = await self.deriv_ws.connect()
+                if connected:
+                    break
+                else:
+                    if attempt < max_connect_attempts - 1:
+                        bot_logger.warning(f"Connection attempt {attempt + 1} failed, retrying...")
+                        await asyncio.sleep(3)
+            except Exception as e:
+                bot_logger.error(f"Connection attempt {attempt + 1} error: {e}")
+                if attempt < max_connect_attempts - 1:
+                    await asyncio.sleep(3)
+        
+        if not self.deriv_ws.connected:
+            bot_logger.critical("Failed to connect to Deriv WebSocket after max attempts!")
             return
         
         await self.deriv_ws.subscribe_ticks(self.gold_symbol)
         
         listen_task = asyncio.create_task(self.deriv_ws.listen())
         
-        await asyncio.sleep(5)
+        await asyncio.sleep(3)
         
         self.state_manager.current_signal = {}
         for chat_id in self.state_manager.subscribers:

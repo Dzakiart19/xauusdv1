@@ -255,34 +255,41 @@ class DerivWebSocket:
                     continue
                 
                 if "tick" in data:
-                    tick = data["tick"]
-                    self.current_price = float(tick["quote"])
-                    self.last_tick_time = tick["epoch"]
-                    self.last_tick_received = time.time()
-                    
-                    tick_data = {
-                        "price": self.current_price,
-                        "epoch": self.last_tick_time,
-                        "symbol": tick.get("symbol", XAUUSD_SYMBOL)
-                    }
-                    self.price_history.append(tick_data)
-                    
-                    if self.on_tick_callback:
-                        try:
-                            await self.on_tick_callback(tick_data)
-                        except Exception as e:
-                            logger.error(f"Tick callback error: {e}")
+                    try:
+                        tick = data["tick"]
+                        self.current_price = float(tick["quote"])
+                        self.last_tick_time = tick["epoch"]
+                        self.last_tick_received = time.time()
+                        
+                        tick_data = {
+                            "price": self.current_price,
+                            "epoch": self.last_tick_time,
+                            "symbol": tick.get("symbol", XAUUSD_SYMBOL)
+                        }
+                        self.price_history.append(tick_data)
+                        
+                        if self.on_tick_callback:
+                            try:
+                                await self.on_tick_callback(tick_data)
+                            except Exception as e:
+                                logger.error(f"Tick callback error: {e}")
+                    except Exception as e:
+                        logger.error(f"Error processing tick: {e}")
                 
-                elif "candles" in data or ("error" in data and "ticks_history" in str(data.get("echo_req", {}))):
+                elif "candles" in data:
                     self.candles_response = data
                     self.candles_event.set()
                 
+                elif "error" in data:
+                    if "ticks_history" in str(data.get("echo_req", {})):
+                        self.candles_response = data
+                        self.candles_event.set()
+                    else:
+                        error_msg = data.get('error', {}).get('message', 'Unknown error')
+                        logger.warning(f"WebSocket error: {error_msg}")
+                
                 elif "pong" in data:
                     logger.debug("Pong received from server")
-                
-                elif "error" in data:
-                    error_msg = data.get('error', {}).get('message', 'Unknown error')
-                    logger.error(f"WebSocket error: {error_msg}")
                     
         except websockets.ConnectionClosed as e:
             logger.warning(f"Connection closed: {e}")
