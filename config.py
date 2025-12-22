@@ -28,7 +28,7 @@ class BotConfig:
     
     ATR_PERIOD = 14
     
-    ANALYSIS_INTERVAL = 20
+    ANALYSIS_INTERVAL = 30
     ANALYSIS_JITTER = 5
     
     UNLIMITED_SIGNALS = True

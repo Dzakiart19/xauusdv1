@@ -145,7 +145,9 @@ class DerivWebSocket:
                     logger.warning(f"Candles timeout (attempt {attempt + 1}/{max_retries}), retrying...")
                     self._pending_requests.pop(request_id, None)
                     if attempt < max_retries - 1:
-                        await asyncio.sleep(1 + (2 ** attempt))
+                        delay = 5 + (5 * (2 ** attempt))
+                        logger.info(f"Waiting {delay}s before retry due to timeout...")
+                        await asyncio.sleep(delay)
                         continue
                     else:
                         logger.error("Max retries exceeded for candles")
@@ -163,7 +165,9 @@ class DerivWebSocket:
                     logger.warning(f"Candles error: {error_msg} (attempt {attempt + 1}/{max_retries})")
                     self._pending_requests.pop(request_id, None)
                     if attempt < max_retries - 1:
-                        await asyncio.sleep(1 + (2 ** attempt))
+                        delay = 5 + (5 * (2 ** attempt))
+                        logger.info(f"Waiting {delay}s before retry due to API error...")
+                        await asyncio.sleep(delay)
                         continue
                     return None
                 
@@ -174,7 +178,9 @@ class DerivWebSocket:
                 
                 self._pending_requests.pop(request_id, None)
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(1 + (2 ** attempt))
+                    delay = 5 + (5 * (2 ** attempt))
+                    logger.info(f"Waiting {delay}s before retry...")
+                    await asyncio.sleep(delay)
                     continue
                 return None
                 
@@ -183,7 +189,9 @@ class DerivWebSocket:
                 if request_id is not None:
                     self._pending_requests.pop(request_id, None)
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(1 + (2 ** attempt))
+                    delay = 5 + (5 * (2 ** attempt))
+                    logger.info(f"Waiting {delay}s before retry due to exception...")
+                    await asyncio.sleep(delay)
                     continue
                 return None
         

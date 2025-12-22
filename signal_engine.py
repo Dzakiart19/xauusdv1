@@ -475,7 +475,9 @@ class SignalEngine:
                     df = await self.get_historical_data()
                     
                     if df is None:
-                        await asyncio.sleep(BotConfig.ANALYSIS_INTERVAL)
+                        wait_time = BotConfig.ANALYSIS_INTERVAL + random.randint(10, 20)
+                        bot_logger.info(f"⏳ Failed to fetch data, waiting {wait_time}s before retry...")
+                        await asyncio.sleep(wait_time)
                         continue
                     
                     bot_logger.info("🔍 Menganalisis data dari Deriv (Scalping Strategy)...")
