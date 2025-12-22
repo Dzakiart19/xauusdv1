@@ -29,11 +29,12 @@ class DerivWebSocket:
         self.candles_response: Optional[dict] = None
         self.candles_event: asyncio.Event = asyncio.Event()
         self.listening: bool = False
-        self.watchdog_timeout: int = 60
+        self.watchdog_timeout: int = 30
         self.total_reconnects: int = 0
         self.connection_start_time: Optional[float] = None
         self._watchdog_task: Optional[asyncio.Task] = None
         self._closing: bool = False
+        self.force_reconnect_after: int = 600
         
     def _get_jittered_delay(self, attempt: int) -> float:
         base_delay = min(self.base_reconnect_delay * (2 ** attempt), self.max_reconnect_delay)
@@ -169,8 +170,14 @@ class DerivWebSocket:
                 
             if self.last_tick_received:
                 time_since_tick = time.time() - self.last_tick_received
-                if time_since_tick > self.watchdog_timeout:
-                    logger.warning(f"Watchdog: No tick for {time_since_tick:.0f}s, connection may be stale")
+                uptime = time.time() - self.connection_start_time if self.connection_start_time else 0
+                
+                if time_since_tick > self.watchdog_timeout or uptime > self.force_reconnect_after:
+                    if time_since_tick > self.watchdog_timeout:
+                        logger.warning(f"Watchdog: No tick for {time_since_tick:.0f}s, connection may be stale")
+                    else:
+                        logger.warning(f"Watchdog: Connection uptime {uptime:.0f}s exceeds limit, forcing refresh")
+                    
                     try:
                         pong_received = await self.send_ping()
                         if not pong_received:
@@ -205,6 +212,7 @@ class DerivWebSocket:
         
         self.listening = True
         self.start_watchdog()
+        no_message_count = 0
         
         try:
             async for message in self.ws:
@@ -213,8 +221,14 @@ class DerivWebSocket:
                     
                 try:
                     data = json.loads(message)
+                    no_message_count = 0
                 except json.JSONDecodeError:
                     logger.warning(f"Invalid JSON received: {message[:100]}")
+                    no_message_count += 1
+                    if no_message_count > 10:
+                        logger.error("Too many invalid messages, marking connection as stale")
+                        self.connected = False
+                        break
                     continue
                 
                 if "tick" in data:
