@@ -87,6 +87,13 @@ async def main():
     application = Application.builder().token(BotConfig.TELEGRAM_BOT_TOKEN).build()
     shutdown_handler.register_application(application)
     
+    # Force disconnect any old polling instances
+    try:
+        await application.bot.delete_webhook(drop_pending_updates=True)
+        bot_logger.info("🔄 Cleaned up old webhook/polling connections")
+    except Exception as e:
+        bot_logger.warning(f"⚠️ Webhook cleanup warning: {e}")
+    
     application.add_handler(CommandHandler("start", telegram_service.start))
     application.add_handler(CommandHandler("subscribe", telegram_service.subscribe))
     application.add_handler(CommandHandler("unsubscribe", telegram_service.unsubscribe))
