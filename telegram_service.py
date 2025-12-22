@@ -295,17 +295,6 @@ class TelegramService:
         if not update.message:
             return
         
-        chat_id = str(update.message.chat_id)
-        admin_chat_id = BotConfig.ADMIN_CHAT_ID
-        
-        if chat_id != admin_chat_id:
-            await update.message.reply_text(
-                "❌ *Akses Ditolak*\n\n"
-                "Hanya admin yang bisa menggunakan /send command.",
-                parse_mode='Markdown'
-            )
-            return
-        
         await update.message.reply_text(
             "🔄 *Generating manual signal...*\n\n"
             "Tunggu sebentar, bot sedang menganalisis pasar dan membuat signal.",
