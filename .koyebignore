@@ -1,0 +1,16 @@
+.git
+.github
+.replit
+replit.md
+README.md
+.gitignore
+*.md
+.env.example
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.venv
+venv
+*.log
+chart_*.png

@@ -3,6 +3,7 @@ import signal
 import sys
 
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler
+from telegram.error import Conflict
 
 from config import BotConfig
 from state_manager import StateManager
@@ -114,8 +115,30 @@ async def main():
     async with application:
         await application.initialize()
         await application.start()
-        if application.updater:
-            await application.updater.start_polling()
+        
+        polling_started = False
+        retry_count = 0
+        max_retries = 3
+        
+        while retry_count < max_retries:
+            try:
+                if application.updater:
+                    await application.updater.start_polling(allowed_updates=['message', 'callback_query'])
+                    polling_started = True
+                break
+            except Conflict as e:
+                retry_count += 1
+                if retry_count < max_retries:
+                    wait_time = 5 * (2 ** retry_count)  # exponential backoff
+                    bot_logger.warning(f"⚠️ Conflict error, retrying in {wait_time}s (attempt {retry_count}/{max_retries}): {e}")
+                    await asyncio.sleep(wait_time)
+                else:
+                    bot_logger.error(f"❌ Failed to start polling after {max_retries} attempts")
+                    raise
+        
+        if not polling_started:
+            bot_logger.critical("❌ Could not start polling - another instance may be running")
+            return
         
         bot_logger.info("🚀 Bot dimulai! Otomatis mencari sinyal 24 jam...")
         bot_logger.info(f"🌐 Health server aktif di port {BotConfig.PORT}")
