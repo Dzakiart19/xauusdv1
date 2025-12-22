@@ -38,5 +38,15 @@
     "sl": 4403.86,
     "timestamp": "2025-12-22T06:29:20.621869+00:00",
     "result": "PENDING"
+  },
+  {
+    "id": 5,
+    "direction": "SELL",
+    "entry_price": 4401.4,
+    "tp1": 4398.4,
+    "tp2": 4396.9,
+    "sl": 4404.4,
+    "timestamp": "2025-12-22T06:32:01.921129+00:00",
+    "result": "PENDING"
   }
 ]

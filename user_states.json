@@ -5,14 +5,14 @@
     "be_count": 0,
     "active_trade": {
       "direction": "SELL",
-      "entry_price": 4400.86,
-      "tp1_level": 4397.86,
-      "tp2_level": 4396.36,
-      "sl_level": 4403.86,
-      "start_time_utc": "2025-12-22T06:29:17.787345+00:00",
+      "entry_price": 4401.4,
+      "tp1_level": 4398.4,
+      "tp2_level": 4396.9,
+      "sl_level": 4404.4,
+      "start_time_utc": "2025-12-22T06:31:58.883403+00:00",
       "status": "active"
     },
-    "tracking_message_id": 7875,
+    "tracking_message_id": 7886,
     "last_signal_time": null
   },
   "7390867903": {
@@ -21,14 +21,14 @@
     "be_count": 0,
     "active_trade": {
       "direction": "SELL",
-      "entry_price": 4400.86,
-      "tp1_level": 4397.86,
-      "tp2_level": 4396.36,
-      "sl_level": 4403.86,
-      "start_time_utc": "2025-12-22T06:29:17.787345+00:00",
+      "entry_price": 4401.4,
+      "tp1_level": 4398.4,
+      "tp2_level": 4396.9,
+      "sl_level": 4404.4,
+      "start_time_utc": "2025-12-22T06:31:58.883403+00:00",
       "status": "active"
     },
-    "tracking_message_id": 7874,
+    "tracking_message_id": 7885,
     "last_signal_time": null
   }
 }
