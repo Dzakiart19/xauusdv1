@@ -291,6 +291,55 @@ class TelegramService:
             parse_mode='Markdown'
         )
     
+    async def send(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not update.message:
+            return
+        
+        chat_id = str(update.message.chat_id)
+        admin_chat_id = BotConfig.ADMIN_CHAT_ID
+        
+        if chat_id != admin_chat_id:
+            await update.message.reply_text(
+                "❌ *Akses Ditolak*\n\n"
+                "Hanya admin yang bisa menggunakan /send command.",
+                parse_mode='Markdown'
+            )
+            return
+        
+        await update.message.reply_text(
+            "🔄 *Generating manual signal...*\n\n"
+            "Tunggu sebentar, bot sedang menganalisis pasar dan membuat signal.",
+            parse_mode='Markdown'
+        )
+        
+        from signal_engine import SignalEngine
+        signal_engine = context.bot_data.get('signal_engine')
+        
+        if not signal_engine:
+            await update.message.reply_text(
+                "❌ *Error*\n\n"
+                "Signal engine tidak tersedia.",
+                parse_mode='Markdown'
+            )
+            return
+        
+        success = await signal_engine.generate_manual_signal(context.bot)
+        
+        if success:
+            await update.message.reply_text(
+                "✅ *Signal Manual Berhasil Dibuat!*\n\n"
+                "Signal sudah dikirim ke semua subscriber.\n"
+                "📍 Gunakan /dashboard untuk tracking.",
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text(
+                "❌ *Gagal Membuat Signal*\n\n"
+                "Ada masalah saat menganalisis data pasar.\n"
+                "Cek logs untuk detail error.",
+                parse_mode='Markdown'
+            )
+    
     async def send_dashboard(self, chat_id, bot) -> None:
         chat_id = str(chat_id)
         user_state = self.state_manager.get_user_state(chat_id)

@@ -103,7 +103,11 @@ async def main():
     application.add_handler(CommandHandler("info", telegram_service.info))
     application.add_handler(CommandHandler("dashboard", telegram_service.dashboard))
     application.add_handler(CommandHandler("signal", telegram_service.signal))
+    application.add_handler(CommandHandler("send", telegram_service.send))
     application.add_handler(CallbackQueryHandler(telegram_service.button_callback))
+    
+    # Store signal_engine in bot_data for /send command
+    application.bot_data['signal_engine'] = signal_engine
     
     signal_task = None
     

@@ -105,6 +105,106 @@ class SignalEngine:
             return self.deriv_ws.get_current_price()
         return None
     
+    async def generate_manual_signal(self, bot) -> bool:
+        """Generate signal manually regardless of market conditions"""
+        try:
+            df = await self.get_historical_data()
+            if df is None:
+                bot_logger.warning("❌ Tidak bisa ambil data pasar")
+                return False
+            
+            df = calculate_indicators(df)
+            latest = df.iloc[-2]
+            latest_close = latest['Close']
+            
+            ema_med_col = BotConfig.get_ema_medium_col()
+            rsi_col = BotConfig.get_rsi_col()
+            
+            ema50_value = latest[ema_med_col]
+            rsi_value = latest[rsi_col]
+            
+            # Determine signal direction based on price vs EMA50 and RSI
+            if latest_close > ema50_value:
+                final_signal = 'BUY'
+                signal_emoji = "📈"
+            elif latest_close < ema50_value:
+                final_signal = 'SELL'
+                signal_emoji = "📉"
+            else:
+                bot_logger.warning("⚠️ Price = EMA50, tidak bisa tentukan arah")
+                return False
+            
+            # Generate levels
+            sl = latest_close - BotConfig.FIXED_SL_USD if final_signal == "BUY" else latest_close + BotConfig.FIXED_SL_USD
+            tp1 = latest_close + BotConfig.FIXED_TP_USD if final_signal == "BUY" else latest_close - BotConfig.FIXED_TP_USD
+            tp2 = latest_close + (BotConfig.FIXED_TP_USD * 1.5) if final_signal == "BUY" else latest_close - (BotConfig.FIXED_TP_USD * 1.5)
+            
+            title = f"{signal_emoji} SCALPING {final_signal}"
+            start_time_utc = datetime.datetime.now(datetime.timezone.utc)
+            
+            temp_trade_info = {
+                "direction": final_signal,
+                "entry_price": latest_close,
+                "tp1_level": tp1,
+                "tp2_level": tp2,
+                "sl_level": sl,
+                "start_time_utc": start_time_utc,
+                "status": "active"
+            }
+            
+            caption = (
+                f"{signal_emoji} *SCALPING {final_signal} XAU/USD* (MANUAL)\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🌐 _Strategi: EMA50 + RSI5 + ADX55_\n\n"
+                f"🕐 Waktu: *{start_time_utc.astimezone(BotConfig.WIB_TZ).strftime('%H:%M:%S WIB')}*\n"
+                f"💵 Entry: *${latest_close:.3f}*\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📋 *KONDISI PASAR*\n"
+                f"📊 EMA50: ${ema50_value:.3f}\n"
+                f"📈 RSI(5): {rsi_value:.1f}\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🎯 *TARGET & PROTEKSI*\n"
+                f"🎯 TP1: *${tp1:.3f}* (+${abs(tp1-latest_close):.2f})\n"
+                f"🏆 TP2: *${tp2:.3f}* (+${abs(tp2-latest_close):.2f})\n"
+                f"🛑 SL: *${sl:.3f}* (-${abs(sl-latest_close):.2f})\n\n"
+                f"📡 Tracking aktif hingga TP/SL tercapai"
+            )
+            
+            if BotConfig.GENERATE_CHARTS:
+                chart_generated = await generate_chart(df, temp_trade_info, title)
+            else:
+                chart_generated = True
+            
+            if chart_generated:
+                if BotConfig.GENERATE_CHARTS:
+                    photo_sent = await self.send_photo(bot, caption)
+                else:
+                    if self._has_telegram_service() and self.telegram_service:
+                        await self.telegram_service.send_to_all_subscribers(bot, caption)
+                    photo_sent = True
+                
+                if photo_sent:
+                    self._record_signal(temp_trade_info)
+                    self.state_manager.update_current_signal(temp_trade_info)
+                    self.state_manager.set_active_trade_for_subscribers(temp_trade_info)
+                    self.state_manager.update_last_signal_info({
+                        'direction': final_signal,
+                        'entry_price': latest_close,
+                        'tp1_level': tp1,
+                        'tp2_level': tp2,
+                        'sl_level': sl,
+                        'time': start_time_utc.astimezone(BotConfig.WIB_TZ).strftime('%H:%M:%S WIB'),
+                        'status': 'AKTIF'
+                    })
+                    self.state_manager.clear_user_tracking_messages()
+                    bot_logger.info(f"✅ Manual signal {final_signal} generated successfully!")
+                    return True
+            
+            return False
+        except Exception as e:
+            bot_logger.error(f"❌ Manual signal error: {e}", exc_info=True)
+            return False
+    
     async def send_photo(self, bot, caption: str) -> bool:
         if os.path.exists(BotConfig.CHART_FILENAME) and self._has_telegram_service() and self.telegram_service:
             await self.telegram_service.send_to_all_subscribers(bot, caption, BotConfig.CHART_FILENAME)
