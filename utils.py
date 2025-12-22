@@ -154,10 +154,17 @@ def format_pnl(direction: str, entry: float, current_price: Optional[float]) -> 
     if current_price:
         if direction == 'BUY':
             pnl_pips = (current_price - entry) * 10
+            pnl_percent = ((current_price - entry) / entry) * 100
         else:
             pnl_pips = (entry - current_price) * 10
+            pnl_percent = ((entry - current_price) / entry) * 100
+        
         pnl_emoji = "🟢" if pnl_pips >= 0 else "🔴"
-        return f"{pnl_emoji} {pnl_pips:+.1f} pips"
+        
+        if pnl_percent >= 0:
+            return f"{pnl_emoji} {pnl_pips:+.1f} pips | {pnl_percent:+.2f}%"
+        else:
+            return f"{pnl_emoji} {pnl_pips:+.1f} pips | {pnl_percent:.2f}%"
     return "N/A"
 
 

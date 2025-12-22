@@ -569,8 +569,31 @@ class TelegramService:
         trade_status = signal_info.get('status', 'active')
         
         pnl_str = format_pnl(direction, entry, current_price)
+        
+        # Calculate PnL percentage details
+        if direction == 'BUY':
+            pnl_percent = ((current_price - entry) / entry) * 100
+            max_win_percent = ((tp2 - entry) / entry) * 100
+            max_loss_percent = ((sl - entry) / entry) * 100
+        else:
+            pnl_percent = ((entry - current_price) / entry) * 100
+            max_win_percent = ((entry - tp2) / entry) * 100
+            max_loss_percent = ((entry - sl) / entry) * 100
+        
         dir_emoji = "📈" if direction == 'BUY' else "📉"
         status_display = "🛡️ BE Mode" if trade_status == 'tp1_hit' else "🔥 Aktif"
+        
+        # Calculate progress to TP/SL
+        if direction == 'BUY':
+            if pnl_percent >= 0:
+                progress_to_tp2 = (pnl_percent / max_win_percent * 100) if max_win_percent > 0 else 0
+            else:
+                progress_to_sl = (abs(pnl_percent) / abs(max_loss_percent) * 100) if max_loss_percent < 0 else 0
+        else:
+            if pnl_percent >= 0:
+                progress_to_tp2 = (pnl_percent / max_win_percent * 100) if max_win_percent > 0 else 0
+            else:
+                progress_to_sl = (abs(pnl_percent) / abs(max_loss_percent) * 100) if max_loss_percent < 0 else 0
         
         tracking_text = (
             f"📍 *TRACKING UPDATE*\n"
@@ -582,7 +605,8 @@ class TelegramService:
             f"🏆 TP2: ${tp2:.3f}\n"
             f"🛑 SL: ${sl:.3f}\n\n"
             f"📊 Status: *{status_display}*\n"
-            f"💹 P&L: *{pnl_str}*"
+            f"💹 P&L: *{pnl_str}*\n"
+            f"📈 Max Win: {max_win_percent:+.2f}% | 📉 Max Loss: {max_loss_percent:.2f}%"
         )
         
         for chat_id in list(self.state_manager.subscribers):
