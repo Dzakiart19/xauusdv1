@@ -35,6 +35,8 @@ class DerivWebSocket:
         self._watchdog_task: Optional[asyncio.Task] = None
         self._closing: bool = False
         self.force_reconnect_after: int = 600
+        self._request_id_counter: int = 0
+        self._pending_requests: dict = {}
         
     def _get_jittered_delay(self, attempt: int) -> float:
         base_delay = min(self.base_reconnect_delay * (2 ** attempt), self.max_reconnect_delay)
@@ -65,7 +67,7 @@ class DerivWebSocket:
                 self.connected = True
                 self.reconnect_attempts = 0
                 self.connection_start_time = time.time()
-                self.last_tick_received = time.time()
+                self.last_tick_received = None
                 
                 if self.total_reconnects > 0:
                     logger.info(f"Reconnected to Deriv WebSocket (total reconnects: {self.total_reconnects})")
@@ -107,9 +109,13 @@ class DerivWebSocket:
             return None
         
         for attempt in range(max_retries):
+            request_id = None
             try:
                 self.candles_event.clear()
                 self.candles_response = None
+                
+                self._request_id_counter += 1
+                request_id = self._request_id_counter
                 
                 request = {
                     "ticks_history": symbol,
@@ -117,8 +123,10 @@ class DerivWebSocket:
                     "count": count,
                     "end": "latest",
                     "granularity": granularity,
-                    "style": "candles"
+                    "style": "candles",
+                    "req_id": request_id
                 }
+                self._pending_requests[request_id] = {'type': 'candles', 'symbol': symbol}
                 await self.ws.send(json.dumps(request))
                 
                 timeout = 25 if attempt == 0 else 15
@@ -135,17 +143,20 @@ class DerivWebSocket:
                 
                 if self.candles_response and "candles" in self.candles_response:
                     logger.debug(f"Got {len(self.candles_response['candles'])} candles on attempt {attempt + 1}")
+                    self._pending_requests.pop(request_id, None)
                     return self.candles_response["candles"]
                 
                 if self.candles_response and "error" in self.candles_response:
                     error_msg = self.candles_response['error'].get('message', 'Unknown error')
                     logger.warning(f"Candles error: {error_msg} (attempt {attempt + 1}/{max_retries})")
+                    self._pending_requests.pop(request_id, None)
                     if attempt < max_retries - 1:
                         await asyncio.sleep(2 ** attempt)
                         continue
                     return None
                 
                 logger.warning(f"No candles in response (attempt {attempt + 1}/{max_retries})")
+                self._pending_requests.pop(request_id, None)
                 if attempt < max_retries - 1:
                     await asyncio.sleep(2 ** attempt)
                     continue
@@ -153,6 +164,8 @@ class DerivWebSocket:
                 
             except Exception as e:
                 logger.error(f"Failed to get candles (attempt {attempt + 1}/{max_retries}): {e}")
+                if request_id is not None:
+                    self._pending_requests.pop(request_id, None)
                 if attempt < max_retries - 1:
                     await asyncio.sleep(2 ** attempt)
                     continue
@@ -236,11 +249,20 @@ class DerivWebSocket:
         self.listening = True
         self.start_watchdog()
         no_message_count = 0
+        last_message_time = time.time()
         
         try:
             async for message in self.ws:
                 if self._closing:
                     break
+                
+                current_time = time.time()
+                time_since_last = current_time - last_message_time
+                if time_since_last > 120:
+                    logger.warning(f"No messages for {time_since_last:.0f}s, connection may be stale")
+                    self.connected = False
+                    break
+                last_message_time = current_time
                     
                 try:
                     data = json.loads(message)
@@ -277,11 +299,18 @@ class DerivWebSocket:
                         logger.error(f"Error processing tick: {e}")
                 
                 elif "candles" in data:
+                    req_id = data.get("req_id")
+                    if req_id and req_id in self._pending_requests:
+                        self._pending_requests.pop(req_id, None)
                     self.candles_response = data
                     self.candles_event.set()
                 
                 elif "error" in data:
-                    if "ticks_history" in str(data.get("echo_req", {})):
+                    echo_req = data.get("echo_req", {})
+                    if isinstance(echo_req, dict) and "ticks_history" in echo_req:
+                        req_id = echo_req.get("req_id")
+                        if req_id and req_id in self._pending_requests:
+                            self._pending_requests.pop(req_id, None)
                         self.candles_response = data
                         self.candles_event.set()
                     else:

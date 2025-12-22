@@ -12,7 +12,7 @@ class BotConfig:
     
     MA_MEDIUM_PERIOD = 50
     
-    RSI_PERIOD = 3
+    RSI_PERIOD = 5
     RSI_OVERBOUGHT = 70
     RSI_OVERSOLD = 30
     RSI_EXIT_OVERSOLD = 23

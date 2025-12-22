@@ -356,6 +356,9 @@ class SignalEngine:
                             self.state_manager.clear_user_tracking_messages()
                     
                     if trade_closed:
+                        cooldown_jitter = random.randint(30, 60)
+                        bot_logger.info(f"⏳ Trade closed, waiting {cooldown_jitter}s before searching new signal...")
+                        await asyncio.sleep(cooldown_jitter)
                         continue
                 
                 else:
@@ -429,7 +432,7 @@ class SignalEngine:
                     if final_signal and not self._can_generate_signal():
                         if self.last_signal_time is not None:
                             cooldown_left = self.signal_cooldown_seconds - (datetime.datetime.now(datetime.timezone.utc) - self.last_signal_time).total_seconds()
-                            bot_logger.info(f"⏳ Signal {final_signal} detected but in cooldown ({cooldown_left:.0f}s left)")
+                            bot_logger.info(f"⏳ Signal {final_signal} detected but COOLDOWN active ({cooldown_left:.0f}s remaining until next signal allowed)")
                         final_signal = None
                     
                     if final_signal:
