@@ -127,38 +127,54 @@ class DerivWebSocket:
                     "req_id": request_id
                 }
                 self._pending_requests[request_id] = {'type': 'candles', 'symbol': symbol}
-                await self.ws.send(json.dumps(request))
                 
-                timeout = 25 if attempt == 0 else 15
                 try:
-                    await asyncio.wait_for(self.candles_event.wait(), timeout=timeout)
-                except asyncio.TimeoutError:
-                    logger.warning(f"Candles timeout (attempt {attempt + 1}/{max_retries}), retrying...")
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(2 ** attempt)
-                        continue
-                    else:
-                        logger.error("Max retries exceeded for candles")
-                        return None
-                
-                if self.candles_response and "candles" in self.candles_response:
-                    logger.debug(f"Got {len(self.candles_response['candles'])} candles on attempt {attempt + 1}")
-                    self._pending_requests.pop(request_id, None)
-                    return self.candles_response["candles"]
-                
-                if self.candles_response and "error" in self.candles_response:
-                    error_msg = self.candles_response['error'].get('message', 'Unknown error')
-                    logger.warning(f"Candles error: {error_msg} (attempt {attempt + 1}/{max_retries})")
+                    await self.ws.send(json.dumps(request))
+                except Exception as send_err:
+                    logger.error(f"Failed to send candles request: {send_err}")
                     self._pending_requests.pop(request_id, None)
                     if attempt < max_retries - 1:
                         await asyncio.sleep(2 ** attempt)
                         continue
                     return None
                 
-                logger.warning(f"No candles in response (attempt {attempt + 1}/{max_retries})")
+                timeout = 20 if attempt == 0 else 15
+                try:
+                    await asyncio.wait_for(self.candles_event.wait(), timeout=timeout)
+                except asyncio.TimeoutError:
+                    logger.warning(f"Candles timeout (attempt {attempt + 1}/{max_retries}), retrying...")
+                    self._pending_requests.pop(request_id, None)
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(1 + (2 ** attempt))
+                        continue
+                    else:
+                        logger.error("Max retries exceeded for candles")
+                        return None
+                
+                if self.candles_response and "candles" in self.candles_response:
+                    candles = self.candles_response["candles"]
+                    if isinstance(candles, list) and len(candles) > 0:
+                        logger.debug(f"Got {len(candles)} candles on attempt {attempt + 1}")
+                        self._pending_requests.pop(request_id, None)
+                        return candles
+                
+                if self.candles_response and "error" in self.candles_response:
+                    error_msg = self.candles_response['error'].get('message', 'Unknown error')
+                    logger.warning(f"Candles error: {error_msg} (attempt {attempt + 1}/{max_retries})")
+                    self._pending_requests.pop(request_id, None)
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(1 + (2 ** attempt))
+                        continue
+                    return None
+                
+                if self.candles_response is None:
+                    logger.warning(f"No candles response received (attempt {attempt + 1}/{max_retries})")
+                else:
+                    logger.warning(f"Unexpected candles response format (attempt {attempt + 1}/{max_retries}): {list(self.candles_response.keys())}")
+                
                 self._pending_requests.pop(request_id, None)
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(1 + (2 ** attempt))
                     continue
                 return None
                 
@@ -167,7 +183,7 @@ class DerivWebSocket:
                 if request_id is not None:
                     self._pending_requests.pop(request_id, None)
                 if attempt < max_retries - 1:
-                    await asyncio.sleep(2 ** attempt)
+                    await asyncio.sleep(1 + (2 ** attempt))
                     continue
                 return None
         
@@ -250,6 +266,7 @@ class DerivWebSocket:
         self.start_watchdog()
         no_message_count = 0
         last_message_time = time.time()
+        message_count = 0
         
         try:
             async for message in self.ws:
@@ -263,17 +280,21 @@ class DerivWebSocket:
                     self.connected = False
                     break
                 last_message_time = current_time
+                message_count += 1
                     
                 try:
                     data = json.loads(message)
                     no_message_count = 0
-                except json.JSONDecodeError:
-                    logger.warning(f"Invalid JSON received: {message[:100]}")
+                except json.JSONDecodeError as jde:
+                    logger.warning(f"Invalid JSON received (attempt {no_message_count + 1}): {message[:100]}")
                     no_message_count += 1
                     if no_message_count > 10:
                         logger.error("Too many invalid messages, marking connection as stale")
                         self.connected = False
                         break
+                    continue
+                except Exception as je:
+                    logger.error(f"JSON parsing error: {je}")
                     continue
                 
                 if "tick" in data:
@@ -307,12 +328,23 @@ class DerivWebSocket:
                 
                 elif "error" in data:
                     echo_req = data.get("echo_req", {})
+                    req_id = data.get("req_id")
+                    
+                    # Handle error response for candles request
                     if isinstance(echo_req, dict) and "ticks_history" in echo_req:
-                        req_id = echo_req.get("req_id")
                         if req_id and req_id in self._pending_requests:
                             self._pending_requests.pop(req_id, None)
                         self.candles_response = data
                         self.candles_event.set()
+                        error_msg = data.get('error', {}).get('message', 'Unknown error')
+                        logger.warning(f"Candles error: {error_msg}")
+                    # Handle error response for other requests with req_id
+                    elif req_id and req_id in self._pending_requests:
+                        self._pending_requests.pop(req_id, None)
+                        self.candles_response = data
+                        self.candles_event.set()
+                        error_msg = data.get('error', {}).get('message', 'Unknown error')
+                        logger.warning(f"Request error (ID {req_id}): {error_msg}")
                     else:
                         error_msg = data.get('error', {}).get('message', 'Unknown error')
                         logger.warning(f"WebSocket error: {error_msg}")
