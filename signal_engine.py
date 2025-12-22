@@ -346,7 +346,7 @@ class SignalEngine:
                 current_signal = self.state_manager.current_signal
                 
                 if current_signal:
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(5)
                     tracking_counter += 1
                     trade_closed = False
                     
@@ -359,10 +359,9 @@ class SignalEngine:
                         sl = current_signal['sl_level']
                         trade_status = current_signal.get('status', 'active')
                         
-                        if tracking_counter % 15 == 0:
-                            bot_logger.info(f"📍 Tracking {direction}: Price=${rt_price:.3f} Entry=${entry:.3f} SL=${sl:.3f}")
-                            if self._has_telegram_service() and self.telegram_service:
-                                await self.telegram_service.send_tracking_update(bot, rt_price, current_signal)
+                        bot_logger.info(f"📍 Tracking {direction}: Price=${rt_price:.3f} Entry=${entry:.3f} SL=${sl:.3f}")
+                        if self._has_telegram_service() and self.telegram_service:
+                            await self.telegram_service.send_tracking_update(bot, rt_price, current_signal)
                         
                         result_info = None
                         
