@@ -101,41 +101,64 @@ class DerivWebSocket:
             logger.error(f"Failed to subscribe: {e}")
             return False
 
-    async def get_candles(self, symbol: str = XAUUSD_SYMBOL, count: int = 200, granularity: int = 60) -> Optional[list]:
+    async def get_candles(self, symbol: str = XAUUSD_SYMBOL, count: int = 200, granularity: int = 60, max_retries: int = 3) -> Optional[list]:
         if not self.connected or not self.ws:
             logger.error("Not connected to WebSocket")
             return None
         
-        try:
-            self.candles_event.clear()
-            self.candles_response = None
-            
-            request = {
-                "ticks_history": symbol,
-                "adjust_start_time": 1,
-                "count": count,
-                "end": "latest",
-                "granularity": granularity,
-                "style": "candles"
-            }
-            await self.ws.send(json.dumps(request))
-            
+        for attempt in range(max_retries):
             try:
-                await asyncio.wait_for(self.candles_event.wait(), timeout=15)
-            except asyncio.TimeoutError:
-                logger.error("Timeout waiting for candles")
+                self.candles_event.clear()
+                self.candles_response = None
+                
+                request = {
+                    "ticks_history": symbol,
+                    "adjust_start_time": 1,
+                    "count": count,
+                    "end": "latest",
+                    "granularity": granularity,
+                    "style": "candles"
+                }
+                await self.ws.send(json.dumps(request))
+                
+                timeout = 25 if attempt == 0 else 15
+                try:
+                    await asyncio.wait_for(self.candles_event.wait(), timeout=timeout)
+                except asyncio.TimeoutError:
+                    logger.warning(f"Candles timeout (attempt {attempt + 1}/{max_retries}), retrying...")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(2 ** attempt)
+                        continue
+                    else:
+                        logger.error("Max retries exceeded for candles")
+                        return None
+                
+                if self.candles_response and "candles" in self.candles_response:
+                    logger.debug(f"Got {len(self.candles_response['candles'])} candles on attempt {attempt + 1}")
+                    return self.candles_response["candles"]
+                
+                if self.candles_response and "error" in self.candles_response:
+                    error_msg = self.candles_response['error'].get('message', 'Unknown error')
+                    logger.warning(f"Candles error: {error_msg} (attempt {attempt + 1}/{max_retries})")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(2 ** attempt)
+                        continue
+                    return None
+                
+                logger.warning(f"No candles in response (attempt {attempt + 1}/{max_retries})")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
                 return None
-            
-            if self.candles_response and "candles" in self.candles_response:
-                return self.candles_response["candles"]
-            
-            if self.candles_response and "error" in self.candles_response:
-                logger.error(f"Candles error: {self.candles_response['error']['message']}")
-            
-            return None
-        except Exception as e:
-            logger.error(f"Failed to get candles: {e}")
-            return None
+                
+            except Exception as e:
+                logger.error(f"Failed to get candles (attempt {attempt + 1}/{max_retries}): {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                return None
+        
+        return None
 
     async def get_active_symbols(self) -> Optional[list]:
         if not self.connected or not self.ws:

@@ -159,7 +159,7 @@ class SignalEngine:
         
         listen_task = asyncio.create_task(self.deriv_ws.listen())
         
-        await asyncio.sleep(3)
+        await asyncio.sleep(5)
         
         self.state_manager.current_signal = {}
         for chat_id in self.state_manager.subscribers:
