@@ -5,7 +5,8 @@
     "be_count": 0,
     "active_trade": {},
     "tracking_message_id": null,
-    "last_signal_time": null
+    "last_signal_time": null,
+    "signal_history": []
   },
   "7390867903": {
     "win_count": 0,
@@ -13,6 +14,7 @@
     "be_count": 0,
     "active_trade": {},
     "tracking_message_id": null,
-    "last_signal_time": null
+    "last_signal_time": null,
+    "signal_history": []
   }
 }

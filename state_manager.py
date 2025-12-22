@@ -27,7 +27,8 @@ class StateManager:
             'be_count': 0,
             'active_trade': {},
             'tracking_message_id': None,
-            'last_signal_time': None
+            'last_signal_time': None,
+            'signal_history': []
         }
     
     def get_user_state(self, chat_id: str | int) -> dict:
@@ -46,6 +47,17 @@ class StateManager:
                     if isinstance(trade.get('start_time_utc'), datetime.datetime):
                         trade['start_time_utc'] = trade['start_time_utc'].isoformat()
                     state_copy['active_trade'] = trade
+                # Ensure signal_history timestamps are serialized
+                if state_copy.get('signal_history'):
+                    sig_history = []
+                    for sig in state_copy['signal_history']:
+                        sig_copy = sig.copy()
+                        if isinstance(sig_copy.get('timestamp'), datetime.datetime):
+                            sig_copy['timestamp'] = sig_copy['timestamp'].isoformat()
+                        if isinstance(sig_copy.get('closed_at'), datetime.datetime):
+                            sig_copy['closed_at'] = sig_copy['closed_at'].isoformat()
+                        sig_history.append(sig_copy)
+                    state_copy['signal_history'] = sig_history
                 states_to_save[chat_id] = state_copy
             
             temp_file = f"{BotConfig.USER_STATES_FILENAME}.tmp"
@@ -68,6 +80,9 @@ class StateManager:
                             )
                         except (ValueError, TypeError):
                             pass
+                    # Migration: ensure signal_history field exists
+                    if 'signal_history' not in state:
+                        state['signal_history'] = []
                     self.user_states[chat_id] = state
                 logger.info(f"Loaded states for {len(self.user_states)} users")
         except Exception as e:
@@ -114,6 +129,7 @@ class StateManager:
         user_state['be_count'] = 0
         user_state['active_trade'] = {}
         user_state['tracking_message_id'] = None
+        user_state['signal_history'] = []
         
         self.save_user_states()
         
@@ -134,6 +150,11 @@ class StateManager:
                     us['be_count'] += 1
                 us['active_trade'] = {}
                 us['tracking_message_id'] = None
+                
+                # Update last signal in user's signal history
+                if us.get('signal_history'):
+                    us['signal_history'][-1]['result'] = result_type
+                    us['signal_history'][-1]['closed_at'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         self.save_user_states()
     
     def set_active_trade_for_subscribers(self, trade_info: dict) -> None:
@@ -141,6 +162,23 @@ class StateManager:
             us = self.get_user_state(cid)
             us['active_trade'] = trade_info.copy()
             us['tracking_message_id'] = None
+            
+            # Add signal to user's signal history
+            signal_entry = {
+                'id': len(us.get('signal_history', [])) + 1,
+                'direction': trade_info.get('direction'),
+                'entry_price': trade_info.get('entry_price'),
+                'tp1': trade_info.get('tp1_level'),
+                'tp2': trade_info.get('tp2_level'),
+                'sl': trade_info.get('sl_level'),
+                'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                'result': 'PENDING'
+            }
+            if 'signal_history' not in us:
+                us['signal_history'] = []
+            us['signal_history'].append(signal_entry)
+            if len(us['signal_history']) > 500:
+                us['signal_history'] = us['signal_history'][-500:]
         self.save_user_states()
     
     def clear_user_tracking_messages(self) -> None:
@@ -222,10 +260,18 @@ class StateManager:
             'win_rate': round(win_rate, 1)
         }
     
-    def get_today_stats(self) -> dict:
+    def get_today_stats(self, chat_id: Optional[str | int] = None) -> dict:
         today = datetime.datetime.now(datetime.timezone.utc).date()
-        today_signals = [s for s in self.signal_history 
-                        if datetime.datetime.fromisoformat(s['timestamp']).date() == today]
+        
+        # If chat_id provided, get per-user stats; otherwise global
+        if chat_id:
+            chat_id = str(chat_id)
+            user_state = self.get_user_state(chat_id)
+            today_signals = [s for s in user_state.get('signal_history', [])
+                            if datetime.datetime.fromisoformat(s['timestamp']).date() == today]
+        else:
+            today_signals = [s for s in self.signal_history 
+                            if datetime.datetime.fromisoformat(s['timestamp']).date() == today]
         
         wins = sum(1 for s in today_signals if s.get('result') == 'WIN')
         losses = sum(1 for s in today_signals if s.get('result') == 'LOSS')

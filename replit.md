@@ -93,6 +93,15 @@ Endpoint `/health` mengembalikan JSON dengan status:
 
 ## Recent Changes
 
+### V2.0 Pro (2025-12-22) - Per-User Tracking Fix
+- **IMPLEMENTED**: Per-user signal history tracking (bukan global lagi)
+- Setiap user punya signal_history terpisah dalam user_states.json
+- `/riset` command sekarang reset SEMUA data (W/L/BE dan signal_history)
+- `/today` stats sekarang per-user (hanya menampilkan signal user tersebut)
+- `/info` command sekarang menampilkan "Statistik Hari Ini (Anda)" bukan global
+- Subscribe tetap aktif saat reset data seperti yang diminta
+- Migration logic untuk existing users (auto-add signal_history field)
+
 ### V2.0 Pro (2025-12-18)
 - Upgrade Python 3.11 → 3.12 untuk kompatibilitas pandas-ta
 - Tambah Rate limiting untuk Telegram API

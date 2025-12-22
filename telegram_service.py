@@ -163,8 +163,9 @@ class TelegramService:
     async def today(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message:
             return
+        chat_id = str(update.message.chat_id)
         
-        today_stats = self.state_manager.get_today_stats()
+        today_stats = self.state_manager.get_today_stats(chat_id)
         
         await update.message.reply_text(
             f"📅 *Statistik Hari Ini*\n"
@@ -201,6 +202,7 @@ class TelegramService:
     async def info(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message:
             return
+        chat_id = str(update.message.chat_id)
         deriv_ws = self.deriv_ws_getter()
         gold_symbol = self.gold_symbol_getter()
         
@@ -214,7 +216,7 @@ class TelegramService:
         if not market_status['is_open']:
             market_info += f"\n   _{market_status['message']}_"
         
-        today_stats = self.state_manager.get_today_stats()
+        today_stats = self.state_manager.get_today_stats(chat_id)
         
         await update.message.reply_text(
             f"⚙️ *Info Sistem Bot V2.0 Pro*\n"
@@ -224,7 +226,7 @@ class TelegramService:
             f"💰 Harga Terakhir: {price_str}\n"
             f"👥 Total Subscriber: {subscriber_count}\n\n"
             f"{market_info}\n\n"
-            f"📊 *Statistik Hari Ini:*\n"
+            f"📊 *Statistik Hari Ini (Anda):*\n"
             f"├ Sinyal: {today_stats['total']}\n"
             f"├ Win: {today_stats['wins']} | Loss: {today_stats['losses']}\n"
             f"└ Win Rate: {today_stats['win_rate']:.1f}%\n\n"
