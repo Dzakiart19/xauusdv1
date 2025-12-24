@@ -69,6 +69,78 @@ class SignalEngine:
     def get_gold_symbol(self) -> str:
         return self.gold_symbol
     
+    def get_strategy_status(self, latest_close: float, ema50_value: float, rsi_value: float, 
+                           prev_rsi_value: float, adx_value: float) -> dict:
+        """Determine current strategy status based on market conditions"""
+        status = "UNKNOWN"
+        emoji = "❓"
+        description = ""
+        
+        current_signal = self.state_manager.current_signal
+        has_active_trades = bool(current_signal) or any(
+            self.state_manager.get_user_state(cid).get('active_trade') 
+            for cid in self.state_manager.subscribers
+        )
+        
+        # POSITION ACTIVE
+        if has_active_trades:
+            status = "POSITION ACTIVE"
+            emoji = "🟣"
+            description = "Sinyal aktif sedang dipantau TP/SL"
+        # TREND WEAK
+        elif adx_value <= BotConfig.ADX_FILTER_THRESHOLD:
+            status = "TREND WEAK (NO TRADE)"
+            emoji = "⚠️"
+            description = "ADX lemah / sideways — tidak ada entry"
+        # BUY SETUP
+        elif latest_close > ema50_value and adx_value > BotConfig.ADX_FILTER_THRESHOLD:
+            rsi_was_oversold = prev_rsi_value < BotConfig.RSI_OVERSOLD
+            rsi_exiting_oversold = rsi_value >= BotConfig.RSI_EXIT_OVERSOLD and rsi_value > prev_rsi_value
+            
+            if rsi_was_oversold and rsi_exiting_oversold:
+                status = "BUY SETUP"
+                emoji = "🟢"
+                description = "Bullish trend valid — menunggu trigger BUY"
+            elif rsi_was_oversold:
+                status = "WAITING PULLBACK"
+                emoji = "⏳"
+                description = "Trend bullish valid — RSI pullback belum selesai"
+            else:
+                status = "WAITING PULLBACK"
+                emoji = "⏳"
+                description = "Harga > EMA50 — menunggu RSI masuk oversold"
+        # SELL SETUP
+        elif latest_close < ema50_value and adx_value > BotConfig.ADX_FILTER_THRESHOLD:
+            rsi_was_overbought = prev_rsi_value > BotConfig.RSI_OVERBOUGHT
+            rsi_exiting_overbought = rsi_value <= BotConfig.RSI_EXIT_OVERBOUGHT and rsi_value < prev_rsi_value
+            
+            if rsi_was_overbought and rsi_exiting_overbought:
+                status = "SELL SETUP"
+                emoji = "🔴"
+                description = "Bearish trend valid — menunggu trigger SELL"
+            elif rsi_was_overbought:
+                status = "WAITING PULLBACK"
+                emoji = "⏳"
+                description = "Trend bearish valid — RSI pullback belum selesai"
+            else:
+                status = "WAITING PULLBACK"
+                emoji = "⏳"
+                description = "Harga < EMA50 — menunggu RSI masuk overbought"
+        else:
+            status = "WAITING PULLBACK"
+            emoji = "⏳"
+            description = "Harga ≈ EMA50 — trend tidak jelas"
+        
+        return {
+            'status': status,
+            'emoji': emoji,
+            'description': description,
+            'rsi': round(rsi_value, 1),
+            'ema': round(ema50_value, 3),
+            'adx': round(adx_value, 1),
+            'price': round(latest_close, 3)
+        }
+    
     async def get_historical_data(self) -> Optional[pd.DataFrame]:
         if not self.deriv_ws or not self.deriv_ws.connected:
             bot_logger.warning("WebSocket not connected, skipping data fetch...")
@@ -626,6 +698,10 @@ class SignalEngine:
                     bot_logger.info(f"📊 Analysis: Price=${latest_close:.3f}, EMA50=${ema50_value:.3f}, RSI={rsi_value:.1f} (prev={prev_rsi_value:.1f}), ADX={adx_value:.1f}")
                     # Update real-time indicators for /info command
                     self.state_manager.update_current_indicators(rsi_value, ema50_value, adx_value)
+                    
+                    # Update strategy status
+                    strategy_status = self.get_strategy_status(latest_close, ema50_value, rsi_value, prev_rsi_value, adx_value)
+                    self.state_manager.update_strategy_status(strategy_status)
                     
                     final_signal = None
                     

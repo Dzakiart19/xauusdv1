@@ -17,6 +17,7 @@ class StateManager:
         self.current_signal: dict = {}
         self.last_signal_info: dict = {}
         self.current_indicators: dict = {}  # Real-time RSI, EMA, ADX
+        self.strategy_status: dict = {}  # Current strategy status
         self.signal_history: list[dict] = []
         self._load_signal_history()
     
@@ -199,6 +200,10 @@ class StateManager:
             'adx': adx,
             'timestamp': datetime.datetime.now(datetime.timezone.utc)
         }
+    
+    def update_strategy_status(self, status_info: dict) -> None:
+        """Update strategy status from signal engine"""
+        self.strategy_status = status_info
     
     def determine_strategy_status(self, price: float, rsi: float, prev_rsi: float, ema: float, adx: float) -> dict:
         """Determine current strategy status based on market conditions"""

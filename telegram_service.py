@@ -238,6 +238,13 @@ class TelegramService:
         ema_str = f"${indicators.get('ema', 0):.3f}" if indicators else "N/A"
         adx_str = f"{indicators.get('adx', 0):.1f}" if indicators else "N/A"
         
+        # Strategy status
+        strat_status = self.state_manager.strategy_status
+        status_emoji = strat_status.get('emoji', '❓')
+        status_name = strat_status.get('status', 'UNKNOWN')
+        status_desc = strat_status.get('description', '')
+        status_section = f"📊 Status Strategi:\n└ {status_emoji} *{status_name}*\n   _{status_desc}_\n\n" if strat_status else ""
+        
         await update.message.reply_text(
             f"⚙️ *Info Sistem Bot V2.0 Pro*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -245,7 +252,8 @@ class TelegramService:
             f"🏷️ Symbol: {gold_symbol or 'frxXAUUSD'}\n"
             f"💰 Harga Terakhir: {price_str}\n"
             f"👥 Total Subscriber: {subscriber_count}\n\n"
-            f"📊 *Strategi Real-Time (EMA50 + RSI(3) + ADX(55)):*\n"
+            f"{status_section}"
+            f"📊 *Indikator Real-Time (EMA50 + RSI(3) + ADX(55)):*\n"
             f"├ 📈 RSI: *{rsi_str}*\n"
             f"├ 💹 EMA50: *{ema_str}*\n"
             f"└ 💪 ADX: *{adx_str}*\n\n"
@@ -367,6 +375,16 @@ class TelegramService:
         
         if not market_status['is_open']:
             dashboard_text += f"⏰ _{market_status['message']}_\n\n"
+        
+        # Strategy status
+        strat_status = self.state_manager.strategy_status
+        if strat_status:
+            dashboard_text += (
+                f"📊 Status Strategi:\n"
+                f"└ {strat_status.get('emoji', '❓')} *{strat_status.get('status', 'UNKNOWN')}*\n"
+                f"   RSI: {strat_status.get('rsi', 0):.1f} | EMA50: ${strat_status.get('ema', 0):.3f} | ADX: {strat_status.get('adx', 0):.1f}\n"
+                f"   _{strat_status.get('description', '')}_\n\n"
+            )
         
         active_trade = user_state.get('active_trade', {})
         
