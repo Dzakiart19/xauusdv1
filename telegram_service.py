@@ -51,39 +51,63 @@ class TelegramService:
         
         self.state_manager.get_user_state(chat_id)
         
+        # Auto-subscribe user on /start
+        was_subscriber = self.state_manager.is_subscriber(chat_id)
+        if not was_subscriber:
+            self.state_manager.add_subscriber(chat_id)
+            user_state = self.state_manager.get_user_state(chat_id)
+            if self.state_manager.current_signal:
+                user_state['active_trade'] = self.state_manager.current_signal.copy()
+                user_state['tracking_message_id'] = None
+            self.state_manager.save_user_states()
+        
         keyboard = [
-            [InlineKeyboardButton("📥 Subscribe", callback_data="subscribe"),
-             InlineKeyboardButton("📤 Unsubscribe", callback_data="unsubscribe")],
             [InlineKeyboardButton("📊 Dashboard", callback_data="dashboard"),
              InlineKeyboardButton("📈 Stats", callback_data="stats")],
             [InlineKeyboardButton("🔄 Reset Data", callback_data="riset"),
-             InlineKeyboardButton("🚀 Send Signal", callback_data="send_signal")]
+             InlineKeyboardButton("🚀 Send Signal", callback_data="send_signal")],
+            [InlineKeyboardButton("❌ Unsubscribe", callback_data="unsubscribe"),
+             InlineKeyboardButton("ℹ️ Info", callback_data="info")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        subscribed = self.state_manager.is_subscriber(chat_id)
-        status = "✅ AKTIF" if subscribed else "❌ TIDAK AKTIF"
-        
-        await update.message.reply_text(
-            f"🏆 *Bot Sinyal XAU/USD V2.0 Pro*\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"🌐 Data real-time dari Deriv WebSocket\n"
-            f"📡 Strategi: EMA50 + RSI(3) + ADX(55)\n\n"
-            f"📋 Status Langganan: *{status}*\n\n"
-            f"📌 *Menu Perintah:*\n"
-            f"├ /subscribe - Mulai berlangganan\n"
-            f"├ /unsubscribe - Berhenti langganan\n"
-            f"├ /dashboard - Lihat posisi aktif\n"
-            f"├ /signal - Lihat sinyal terakhir\n"
-            f"├ /stats - Statistik trading Anda\n"
-            f"├ /today - Statistik hari ini\n"
-            f"├ /send - Generate signal manual sekarang\n"
-            f"├ /riset - Reset data trading Anda\n"
-            f"└ /info - Info sistem\n\n"
-            f"💡 Bot ini aktif 24 jam mencari sinyal terbaik!",
-            parse_mode='Markdown',
-            reply_markup=reply_markup
-        )
+        # Show welcome message if new subscriber
+        if not was_subscriber:
+            await update.message.reply_text(
+                f"🎉 *Selamat Datang!*\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"🏆 Bot Sinyal XAU/USD V2.0 Pro\n"
+                f"✅ Anda sudah otomatis berlangganan!\n\n"
+                f"🌐 Data real-time dari Deriv WebSocket\n"
+                f"📡 Strategi: EMA50 + RSI(3) + ADX(55)\n\n"
+                f"📬 Bot akan mengirim sinyal otomatis 24 jam\n"
+                f"📊 Gunakan /dashboard untuk pantau posisi\n\n"
+                f"💡 *Menu Cepat:*\n"
+                f"├ /dashboard - Lihat posisi aktif\n"
+                f"├ /stats - Statistik trading Anda\n"
+                f"├ /today - Statistik hari ini\n"
+                f"├ /send - Signal manual\n"
+                f"└ /info - Info sistem\n\n"
+                f"🚀 Selamat trading!",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+        else:
+            # Returning user
+            await update.message.reply_text(
+                f"🏆 *Bot Sinyal XAU/USD V2.0 Pro*\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"✅ Status: AKTIF & BERLANGGANAN\n\n"
+                f"📡 Strategi: EMA50 + RSI(3) + ADX(55)\n"
+                f"💰 Real-time tracking & sinyal otomatis\n\n"
+                f"💡 *Menu Cepat:*\n"
+                f"├ /dashboard - Lihat posisi aktif\n"
+                f"├ /stats - Statistik trading\n"
+                f"├ /send - Signal manual\n"
+                f"└ /info - Info sistem",
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
     
     async def subscribe(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not update.message:
