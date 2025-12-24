@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import io
 import os
 import logging
 from typing import Optional, TYPE_CHECKING
@@ -63,7 +64,7 @@ class TelegramService:
             f"🏆 *Bot Sinyal XAU/USD V2.0 Pro*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"🌐 Data real-time dari Deriv WebSocket\n"
-            f"📡 Strategi: EMA50 + RSI5 + ADX55\n\n"
+            f"📡 Strategi: EMA50 + RSI(5) + ADX(55)\n\n"
             f"📋 Status Langganan: *{status}*\n\n"
             f"📌 *Menu Perintah:*\n"
             f"├ /subscribe - Mulai berlangganan\n"
@@ -497,7 +498,6 @@ class TelegramService:
         async def send_to_one(chat_id: str, photo_data: Optional[bytes]):
             try:
                 if photo_data:
-                    import io
                     await self._safe_send(bot.send_photo(
                         chat_id=chat_id, 
                         photo=io.BytesIO(photo_data), 
