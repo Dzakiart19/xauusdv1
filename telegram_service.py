@@ -64,7 +64,7 @@ class TelegramService:
             f"🏆 *Bot Sinyal XAU/USD V2.0 Pro*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"🌐 Data real-time dari Deriv WebSocket\n"
-            f"📡 Strategi: EMA50 + RSI(5) + ADX(55)\n\n"
+            f"📡 Strategi: EMA50 + RSI(3) + ADX(55)\n\n"
             f"📋 Status Langganan: *{status}*\n\n"
             f"📌 *Menu Perintah:*\n"
             f"├ /subscribe - Mulai berlangganan\n"

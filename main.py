@@ -197,7 +197,7 @@ if __name__ == '__main__':
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🌐 Menggunakan Deriv WebSocket
 🔄 Mode: 24 Jam Non-Stop + Unlimited Signals
-📡 Strategi: EMA50 + RSI(5) + ADX(55)
+📡 Strategi: EMA50 + RSI(3) + ADX(55)
 💰 Money Management: SL $3 | TP $3 (1:1 Ratio)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     """)
