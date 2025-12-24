@@ -31,7 +31,8 @@ class BotConfig:
     ANALYSIS_INTERVAL = 30
     ANALYSIS_JITTER = 5
     
-    TRACKING_UPDATE_INTERVAL = 1.5  # Real-time price tracking every 1.5 seconds
+    TRACKING_UPDATE_INTERVAL = 5  # Real-time price tracking every 5 seconds
+    TRACKING_PRICE_DELTA = 0.50  # Only update if price changes by $0.50
     
     UNLIMITED_SIGNALS = True
     SIGNAL_COOLDOWN_SECONDS = 120

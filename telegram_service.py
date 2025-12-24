@@ -26,6 +26,8 @@ class TelegramService:
         self.gold_symbol_getter = gold_symbol_getter
         self._rate_limit_lock = asyncio.Lock()
         self._last_send_time = 0.0
+        self._last_tracking_price = {}  # Track last price per user
+        self._tracking_update_counter = 0  # Force update every N calls
     
     async def _safe_send(self, coro):
         try:
@@ -40,6 +42,8 @@ class TelegramService:
             error_msg = str(e).lower()
             if "chat not found" in error_msg or "not found" in error_msg:
                 logger.debug(f"Chat not found, will be removed: {e}")
+            elif "message is not modified" in error_msg:
+                logger.debug(f"Message unchanged, skipping: {e}")
             else:
                 logger.error(f"Failed to send message: {e}")
             return None
@@ -730,7 +734,13 @@ class TelegramService:
         It works for both:
         - Manual signals (per-user active_trade, no global signal_info)
         - Global signals (all users get same signal_info)
+        
+        Deduplication: Only updates when price changes by TRACKING_PRICE_DELTA or every 10 calls
         """
+        # Increment counter for forced updates
+        self._tracking_update_counter += 1
+        force_update = (self._tracking_update_counter % 10 == 0)
+        
         subscribers = list(self.state_manager.subscribers)
         sent_count = 0
         failed_users = []
@@ -747,6 +757,16 @@ class TelegramService:
             active_trade = user_state.get('active_trade')
             if not active_trade:
                 continue
+            
+            # Debounce: Skip if price hasn't changed much and not time for forced update
+            last_price = self._last_tracking_price.get(chat_id)
+            price_delta = abs(current_price - last_price) if last_price else float('inf')
+            should_update = force_update or price_delta >= BotConfig.TRACKING_PRICE_DELTA
+            
+            if last_price is not None and not should_update:
+                continue  # Skip this user, price hasn't changed enough
+            
+            self._last_tracking_price[chat_id] = current_price  # Update last price
             
             direction = active_trade['direction']
             entry = active_trade['entry_price']
