@@ -146,6 +146,12 @@ class SignalEngine:
             bot_logger.warning("WebSocket not connected, skipping data fetch...")
             return None
         
+        # Skip if market is closed - Deriv API won't have data
+        market_status = BotConfig.get_market_status()
+        if not market_status['is_open']:
+            bot_logger.info(f"📅 Market closed ({market_status['message']}), skipping candle fetch")
+            return None
+        
         max_retries = 3
         for attempt in range(max_retries):
             try:
