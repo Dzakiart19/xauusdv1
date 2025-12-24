@@ -389,12 +389,10 @@ class SignalEngine:
                         
                         if self._has_telegram_service() and self.telegram_service:
                             try:
-                                if current_signal:
-                                    await self.telegram_service.send_tracking_update(bot, rt_price, current_signal)
-                                    bot_logger.debug(f"✅ Tracking update sent")
-                                else:
-                                    # Per-user manual signal tracking - send empty signal for per-user display
-                                    await self.telegram_service.send_tracking_update(bot, rt_price, {})
+                                # ALWAYS send tracking update - works for both global AND per-user signals
+                                # send_tracking_update() loops all subscribers and tracks from their active_trade
+                                await self.telegram_service.send_tracking_update(bot, rt_price, current_signal if current_signal else {})
+                                bot_logger.debug(f"✅ Tracking update sent to all active traders")
                             except Exception as e:
                                 bot_logger.error(f"❌ Failed to send tracking update: {e}")
                         else:

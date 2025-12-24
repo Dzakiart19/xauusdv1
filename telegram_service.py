@@ -563,9 +563,13 @@ class TelegramService:
                 await asyncio.sleep(0.5)
     
     async def send_tracking_update(self, bot, current_price: float, signal_info: dict) -> None:
-        if not signal_info:
-            return
+        """Send tracking updates for ALL active trades (manual OR global signals)
         
+        This method ALWAYS loops through subscribers and tracks their active_trade.
+        It works for both:
+        - Manual signals (per-user active_trade, no global signal_info)
+        - Global signals (all users get same signal_info)
+        """
         subscribers = list(self.state_manager.subscribers)
         sent_count = 0
         failed_users = []
