@@ -37,7 +37,11 @@ class TelegramService:
                 self._last_send_time = asyncio.get_event_loop().time()
                 return await coro
         except (RetryAfter, TimedOut, TelegramError) as e:
-            logger.error(f"Failed to send message: {e}")
+            error_msg = str(e).lower()
+            if "chat not found" in error_msg or "not found" in error_msg:
+                logger.debug(f"Chat not found, will be removed: {e}")
+            else:
+                logger.error(f"Failed to send message: {e}")
             return None
     
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
