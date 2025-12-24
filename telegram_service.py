@@ -664,18 +664,22 @@ class TelegramService:
                 
                 if not sent:
                     # Send new message
-                    msg = await self._safe_send(bot.send_message(
-                        chat_id=chat_id,
-                        text=tracking_text,
-                        parse_mode='Markdown'
-                    ))
-                    if msg:
-                        user_state['tracking_message_id'] = msg.message_id
-                        self.state_manager.save_user_states()
-                        sent = True
-                        sent_count += 1
-                    else:
-                        logger.warning(f"⚠️ Failed to send tracking message to {chat_id}")
+                    try:
+                        msg = await self._safe_send(bot.send_message(
+                            chat_id=chat_id,
+                            text=tracking_text,
+                            parse_mode='Markdown'
+                        ))
+                        if msg:
+                            user_state['tracking_message_id'] = msg.message_id
+                            self.state_manager.save_user_states()
+                            sent = True
+                            sent_count += 1
+                        else:
+                            logger.warning(f"⚠️ Failed to send tracking message to {chat_id}")
+                            failed_users.append(chat_id)
+                    except Exception as e:
+                        logger.warning(f"⚠️ Tracking send error for {chat_id}: {e}")
                         failed_users.append(chat_id)
             except Exception as e:
                 logger.error(f"Tracking update error for {chat_id}: {e}", exc_info=True)

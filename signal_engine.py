@@ -212,12 +212,9 @@ class SignalEngine:
                         'result': 'PENDING'
                     })
                     self.state_manager.save_user_states()
-                    # SET active_trade FOR ALL SUBSCRIBERS SO TRACKING WORKS FOR EVERYONE
-                    self.state_manager.set_active_trade_for_subscribers(temp_trade_info)
-                    # SET current_signal SO TRACKING LOOP WORKS FOR MANUAL SIGNAL
-                    self.state_manager.update_current_signal(temp_trade_info)
-                    self.state_manager.clear_user_tracking_messages()
-                    bot_logger.info(f"✅ Manual signal {final_signal} sent to user {target_chat_id}! Broadcasting tracking to ALL subscribers...")
+                    # ❌ DO NOT set global signal for manual signals!
+                    # Only user 1's state is updated, NOT broadcast to others
+                    bot_logger.info(f"✅ Manual signal {final_signal} sent to user {target_chat_id} ONLY! Personal tracking enabled.")
                 else:
                     # Broadcast to all subscribers
                     await self.telegram_service.send_to_all_subscribers(bot, caption)
@@ -363,25 +360,41 @@ class SignalEngine:
                 
                 current_signal = self.state_manager.current_signal
                 
-                if current_signal:
+                # Check if there's ANY active trade (global or manual per-user)
+                has_active_trades = bool(current_signal) or any(
+                    self.state_manager.get_user_state(cid).get('active_trade') 
+                    for cid in self.state_manager.subscribers
+                )
+                
+                if has_active_trades:
                     await asyncio.sleep(5)
                     tracking_counter += 1
                     trade_closed = False
                     
                     rt_price = await self.get_realtime_price()
                     if rt_price:
-                        direction = current_signal['direction']
-                        entry = current_signal['entry_price']
-                        tp1 = current_signal['tp1_level']
-                        tp2 = current_signal['tp2_level']
-                        sl = current_signal['sl_level']
-                        trade_status = current_signal.get('status', 'active')
+                        # Use current_signal if available (broadcast signal), otherwise None (per-user signals)
+                        direction = current_signal.get('direction') if current_signal else None
+                        entry = current_signal.get('entry_price') if current_signal else None
+                        tp1 = current_signal.get('tp1_level') if current_signal else None
+                        tp2 = current_signal.get('tp2_level') if current_signal else None
+                        sl = current_signal.get('sl_level') if current_signal else None
+                        trade_status = current_signal.get('status', 'active') if current_signal else 'active'
                         
-                        bot_logger.info(f"📍 Tracking #{tracking_counter} {direction}: Price=${rt_price:.3f} Entry=${entry:.3f} SL=${sl:.3f}")
+                        if direction and entry and tp1 and tp2 and sl:
+                            bot_logger.info(f"📍 Tracking #{tracking_counter} {direction}: Price=${rt_price:.3f} Entry=${entry:.3f} SL=${sl:.3f}")
+                        else:
+                            # Manual per-user signals - track individual active trades
+                            bot_logger.info(f"📍 Tracking #{tracking_counter} - Per-user tracking (manual signals)")
+                        
                         if self._has_telegram_service() and self.telegram_service:
                             try:
-                                await self.telegram_service.send_tracking_update(bot, rt_price, current_signal)
-                                bot_logger.debug(f"✅ Tracking update sent to subscribers")
+                                if current_signal:
+                                    await self.telegram_service.send_tracking_update(bot, rt_price, current_signal)
+                                    bot_logger.debug(f"✅ Tracking update sent")
+                                else:
+                                    # Per-user manual signal tracking - send empty signal for per-user display
+                                    await self.telegram_service.send_tracking_update(bot, rt_price, {})
                             except Exception as e:
                                 bot_logger.error(f"❌ Failed to send tracking update: {e}")
                         else:
@@ -389,7 +402,8 @@ class SignalEngine:
                         
                         result_info = None
                         
-                        if direction == 'BUY':
+                        # Only process global signal result tracking, per-user tracking handled per-user in send_tracking_update
+                        if current_signal and direction == 'BUY' and tp2 and tp1:
                             if rt_price >= tp2:
                                 result_info = {'type': 'WIN', 'emoji': '🏆', 'text': 'TP2 HIT - FULL WIN!'}
                             elif rt_price >= tp1 and trade_status == 'active':
@@ -415,13 +429,13 @@ class SignalEngine:
                                     await self.telegram_service.send_to_all_subscribers(bot, tp1_msg)
                                 bot_logger.info(f"✅ TP1 HIT! SL moved to BE. Price: {rt_price:.3f}")
                             
-                            elif rt_price <= sl:
+                            elif sl and rt_price <= sl:
                                 if trade_status == 'tp1_hit':
                                     result_info = {'type': 'BREAK_EVEN', 'emoji': '⚖️', 'text': 'BREAK EVEN - TP1 Hit, SL at Entry'}
                                 else:
                                     result_info = {'type': 'LOSS', 'emoji': '❌', 'text': 'STOP LOSS HIT'}
                         
-                        else:
+                        elif current_signal and direction == 'SELL' and tp2 and tp1:
                             if rt_price <= tp2:
                                 result_info = {'type': 'WIN', 'emoji': '🏆', 'text': 'TP2 HIT - FULL WIN!'}
                             elif rt_price <= tp1 and trade_status == 'active':
@@ -447,7 +461,7 @@ class SignalEngine:
                                     await self.telegram_service.send_to_all_subscribers(bot, tp1_msg)
                                 bot_logger.info(f"✅ TP1 HIT! SL moved to BE. Price: {rt_price:.3f}")
                             
-                            elif rt_price >= sl:
+                            elif sl and rt_price >= sl:
                                 if trade_status == 'tp1_hit':
                                     result_info = {'type': 'BREAK_EVEN', 'emoji': '⚖️', 'text': 'BREAK EVEN - TP1 Hit, SL at Entry'}
                                 else:
