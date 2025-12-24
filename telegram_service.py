@@ -502,6 +502,28 @@ class TelegramService:
                 parse_mode='Markdown'
             )
     
+    async def send_to_one_subscriber(self, bot, chat_id: str | int, text: str) -> bool:
+        """Send message to ONE specific subscriber (per-user tracking/results)"""
+        chat_id = str(chat_id)
+        if not chat_id.isdigit():
+            logger.warning(f"⚠️ Skipping invalid subscriber ID: {chat_id}")
+            return False
+        
+        try:
+            await self._safe_send(bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode='Markdown'
+            ))
+            return True
+        except TelegramError as e:
+            error_str = str(e).lower()
+            logger.error(f"Failed to send to user {chat_id}: {e}")
+            if "blocked" in error_str or "not found" in error_str or "deactivated" in error_str:
+                self.state_manager.remove_subscriber(chat_id)
+                logger.info(f"Removed inactive subscriber: {chat_id}")
+            return False
+    
     async def send_to_all_subscribers(self, bot, text: str, photo_path: Optional[str] = None) -> None:
         photo_bytes = None
         if photo_path and os.path.exists(photo_path):

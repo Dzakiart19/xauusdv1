@@ -135,8 +135,11 @@ class StateManager:
         
         return old_stats
     
-    def update_trade_result(self, result_type: str) -> None:
-        for cid in self.subscribers:
+    def update_trade_result(self, result_type: str, chat_id: str | int = None) -> None:
+        # If specific chat_id provided, update only that user; otherwise update all
+        cids_to_update = [str(chat_id)] if chat_id else self.subscribers
+        
+        for cid in cids_to_update:
             us = self.get_user_state(cid)
             if us.get('active_trade'):
                 if result_type == 'WIN':

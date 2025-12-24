@@ -399,8 +399,9 @@ class SignalEngine:
                             bot_logger.warning("⚠️ Telegram service not available for tracking")
                         
                         result_info = None
+                        users_with_closed_trades = []
                         
-                        # Only process global signal result tracking, per-user tracking handled per-user in send_tracking_update
+                        # GLOBAL SIGNAL result tracking
                         if current_signal and direction == 'BUY' and tp2 and tp1:
                             if rt_price >= tp2:
                                 result_info = {'type': 'WIN', 'emoji': '🏆', 'text': 'TP2 HIT - FULL WIN!'}
@@ -464,6 +465,79 @@ class SignalEngine:
                                     result_info = {'type': 'BREAK_EVEN', 'emoji': '⚖️', 'text': 'BREAK EVEN - TP1 Hit, SL at Entry'}
                                 else:
                                     result_info = {'type': 'LOSS', 'emoji': '❌', 'text': 'STOP LOSS HIT'}
+                        
+                        # PER-USER MANUAL SIGNAL SL/TP detection (if NO global signal)
+                        if not current_signal:
+                            for cid in self.state_manager.subscribers:
+                                user_state = self.state_manager.get_user_state(cid)
+                                active_trade = user_state.get('active_trade')
+                                if not active_trade:
+                                    continue
+                                
+                                u_dir = active_trade.get('direction')
+                                u_entry = active_trade.get('entry_price')
+                                u_sl = active_trade.get('sl_level')
+                                u_tp1 = active_trade.get('tp1_level')
+                                u_tp2 = active_trade.get('tp2_level')
+                                u_status = active_trade.get('status', 'active')
+                                
+                                u_result = None
+                                
+                                # BUY signal SL/TP detection
+                                if u_dir == 'BUY':
+                                    if rt_price >= u_tp2:
+                                        u_result = {'type': 'WIN', 'emoji': '🏆', 'text': 'TP2 HIT - FULL WIN!'}
+                                    elif rt_price >= u_tp1 and u_status == 'active':
+                                        active_trade['status'] = 'tp1_hit'
+                                        active_trade['sl_level'] = u_entry
+                                        self.state_manager.save_user_states()
+                                        if self._has_telegram_service() and self.telegram_service:
+                                            await self.telegram_service.send_to_one_subscriber(bot, cid, "🎯 *TP1 TERCAPAI!*\n━━━━━━━━━━━━━━━━━━━━━\n\n💰 Harga: *${rt_price:.3f}*\n🎯 TP1: ${u_tp1:.3f}\n\n🛡️ *SL dipindahkan ke Entry (Break Even)*\n🏆 Target selanjutnya: TP2\n\n💡 Profit sebagian sudah aman!")
+                                        bot_logger.info(f"✅ User {cid} TP1 HIT! SL moved to BE. Price: {rt_price:.3f}")
+                                    elif u_sl and rt_price <= u_sl:
+                                        if u_status == 'tp1_hit':
+                                            u_result = {'type': 'BREAK_EVEN', 'emoji': '⚖️', 'text': 'BREAK EVEN - TP1 Hit, SL at Entry'}
+                                        else:
+                                            u_result = {'type': 'LOSS', 'emoji': '❌', 'text': 'STOP LOSS HIT'}
+                                
+                                # SELL signal SL/TP detection
+                                elif u_dir == 'SELL':
+                                    if rt_price <= u_tp2:
+                                        u_result = {'type': 'WIN', 'emoji': '🏆', 'text': 'TP2 HIT - FULL WIN!'}
+                                    elif rt_price <= u_tp1 and u_status == 'active':
+                                        active_trade['status'] = 'tp1_hit'
+                                        active_trade['sl_level'] = u_entry
+                                        self.state_manager.save_user_states()
+                                        if self._has_telegram_service() and self.telegram_service:
+                                            await self.telegram_service.send_to_one_subscriber(bot, cid, "🎯 *TP1 TERCAPAI!*\n━━━━━━━━━━━━━━━━━━━━━\n\n💰 Harga: *${rt_price:.3f}*\n🎯 TP1: ${u_tp1:.3f}\n\n🛡️ *SL dipindahkan ke Entry (Break Even)*\n🏆 Target selanjutnya: TP2\n\n💡 Profit sebagian sudah aman!")
+                                        bot_logger.info(f"✅ User {cid} TP1 HIT! SL moved to BE. Price: {rt_price:.3f}")
+                                    elif u_sl and rt_price >= u_sl:
+                                        if u_status == 'tp1_hit':
+                                            u_result = {'type': 'BREAK_EVEN', 'emoji': '⚖️', 'text': 'BREAK EVEN - TP1 Hit, SL at Entry'}
+                                        else:
+                                            u_result = {'type': 'LOSS', 'emoji': '❌', 'text': 'STOP LOSS HIT'}
+                                
+                                # Send result to user if trade closed
+                                if u_result:
+                                    self.state_manager.update_trade_result(u_result['type'], cid)
+                                    duration = 0
+                                    if u_entry and 'start_time_utc' in active_trade:
+                                        try:
+                                            start = active_trade['start_time_utc']
+                                            if isinstance(start, str):
+                                                start = datetime.datetime.fromisoformat(start)
+                                            duration = round((datetime.datetime.now(datetime.timezone.utc) - start).total_seconds() / 60, 1)
+                                        except:
+                                            duration = 0
+                                    
+                                    result_text = f"{u_result['emoji']} *{u_result['text']}*\n━━━━━━━━━━━━━━━━━━━━━\n\n💵 Entry: *${u_entry:.3f}*\n💰 Exit: *${rt_price:.3f}*\n⏱️ Durasi: *{duration} menit*\n\n📊 Gunakan /stats untuk melihat statistik\n🔍 Bot kembali mencari sinyal..."
+                                    if self._has_telegram_service() and self.telegram_service:
+                                        await self.telegram_service.send_to_one_subscriber(bot, cid, result_text)
+                                    
+                                    active_trade.clear()
+                                    self.state_manager.save_user_states()
+                                    users_with_closed_trades.append(cid)
+                                    bot_logger.info(f"✅ User {cid} trade closed: {u_result['text']} @ ${rt_price:.3f}")
                         
                         trade_closed = False
                         if result_info:
