@@ -397,7 +397,32 @@ class SignalEngine:
                         last_daily_summary = now.date()
                 
                 market_status = BotConfig.get_market_status()
+                current_signal = self.state_manager.current_signal
+                
+                # Check if there's ANY active trade (global or manual per-user)
+                has_active_trades = bool(current_signal) or any(
+                    self.state_manager.get_user_state(cid).get('active_trade') 
+                    for cid in self.state_manager.subscribers
+                )
+                
                 if not market_status['is_open']:
+                    # Market is closed - BUT STILL TRACK existing trades!
+                    if has_active_trades:
+                        # Continue tracking even when market is closed
+                        await asyncio.sleep(BotConfig.TRACKING_UPDATE_INTERVAL)
+                        rt_price = await self.get_realtime_price()
+                        if rt_price:
+                            tracking_counter += 1
+                            bot_logger.info(f"📍 Tracking #{tracking_counter} (Market Closed) - Price=${rt_price:.3f}")
+                            if self._has_telegram_service() and self.telegram_service:
+                                try:
+                                    await self.telegram_service.send_tracking_update(bot, rt_price, current_signal if current_signal else {})
+                                    bot_logger.debug(f"✅ Tracking update sent (market closed)")
+                                except Exception as e:
+                                    bot_logger.error(f"❌ Failed to send tracking update: {e}")
+                        continue
+                    
+                    # Market closed AND no active trades - show notification
                     now_dt = datetime.datetime.now()
                     should_notify = (
                         last_market_closed_notify is None or 
@@ -436,14 +461,6 @@ class SignalEngine:
                     else:
                         await asyncio.sleep(10)
                         continue
-                
-                current_signal = self.state_manager.current_signal
-                
-                # Check if there's ANY active trade (global or manual per-user)
-                has_active_trades = bool(current_signal) or any(
-                    self.state_manager.get_user_state(cid).get('active_trade') 
-                    for cid in self.state_manager.subscribers
-                )
                 
                 if has_active_trades:
                     await asyncio.sleep(BotConfig.TRACKING_UPDATE_INTERVAL)
