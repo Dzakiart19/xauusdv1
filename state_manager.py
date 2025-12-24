@@ -200,6 +200,69 @@ class StateManager:
             'timestamp': datetime.datetime.now(datetime.timezone.utc)
         }
     
+    def determine_strategy_status(self, price: float, rsi: float, prev_rsi: float, ema: float, adx: float) -> dict:
+        """Determine current strategy status based on market conditions"""
+        status_key = "TREND WEAK"
+        status_display = "⚠️ NO TRADE — Trend Lemah (ADX < 25)"
+        condition_text = f"Trend lemah / sideways — ADX: {adx:.1f}"
+        emoji = "⚠️"
+        
+        if adx > 25:  # ADX threshold = 25 (same as filter)
+            has_active_position = bool(getattr(self, 'current_signal', {}))
+            
+            if has_active_position:
+                status_key = "POSITION ACTIVE"
+                status_display = "🔥 POSITION ACTIVE"
+                condition_text = "Ada sinyal aktif yang dipantau TP / SL"
+                emoji = "🔥"
+            else:
+                price_above_ema = price > ema
+                price_below_ema = price < ema
+                
+                rsi_oversold = rsi < 30
+                rsi_overbought = rsi > 70
+                prev_rsi_oversold = prev_rsi < 30
+                prev_rsi_overbought = prev_rsi > 70
+                
+                # BUY SETUP: Price > EMA, RSI exiting oversold, ADX strong
+                if price_above_ema:
+                    if prev_rsi_oversold and rsi >= 30 and rsi > prev_rsi:
+                        status_key = "BUY SETUP"
+                        status_display = "🟢 BUY SETUP (Bullish Trend Valid)"
+                        condition_text = "Pullback selesai — menunggu trigger BUY"
+                        emoji = "🟢"
+                    else:
+                        status_key = "WAITING PULLBACK"
+                        status_display = "⏳ WAITING PULLBACK"
+                        condition_text = "Bullish tapi RSI belum oversold — menunggu koreksi"
+                        emoji = "⏳"
+                
+                # SELL SETUP: Price < EMA, RSI exiting overbought, ADX strong
+                elif price_below_ema:
+                    if prev_rsi_overbought and rsi <= 70 and rsi < prev_rsi:
+                        status_key = "SELL SETUP"
+                        status_display = "🔴 SELL SETUP (Bearish Trend Valid)"
+                        condition_text = "Momentum turun — menunggu trigger SELL"
+                        emoji = "🔴"
+                    else:
+                        status_key = "WAITING PULLBACK"
+                        status_display = "⏳ WAITING PULLBACK"
+                        condition_text = "Bearish tapi RSI belum overbought — menunggu koreksi"
+                        emoji = "⏳"
+                else:
+                    # Price = EMA
+                    status_key = "WAITING PULLBACK"
+                    status_display = "⏳ WAITING PULLBACK"
+                    condition_text = "Harga = EMA — menunggu break direction"
+                    emoji = "⏳"
+        
+        return {
+            'key': status_key,
+            'display': status_display,
+            'condition': condition_text,
+            'emoji': emoji
+        }
+    
     def clear_current_signal(self) -> None:
         self.current_signal = {}
     
