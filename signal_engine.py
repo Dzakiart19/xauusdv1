@@ -150,7 +150,7 @@ class SignalEngine:
         for attempt in range(max_retries):
             try:
                 symbol = self.gold_symbol or "frxXAUUSD"
-                candles = await self.deriv_ws.get_candles(symbol=symbol, count=200, granularity=60)
+                candles = await self.deriv_ws.get_candles(symbol=symbol, count=100, granularity=60)
                 
                 if not candles or not isinstance(candles, list):
                     if attempt < max_retries - 1:
@@ -439,7 +439,7 @@ class SignalEngine:
                 )
                 
                 if has_active_trades:
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(BotConfig.TRACKING_UPDATE_INTERVAL)
                     tracking_counter += 1
                     trade_closed = False
                     

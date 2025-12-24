@@ -31,6 +31,8 @@ class BotConfig:
     ANALYSIS_INTERVAL = 30
     ANALYSIS_JITTER = 5
     
+    TRACKING_UPDATE_INTERVAL = 1.5  # Real-time price tracking every 1.5 seconds
+    
     UNLIMITED_SIGNALS = True
     SIGNAL_COOLDOWN_SECONDS = 120
     
