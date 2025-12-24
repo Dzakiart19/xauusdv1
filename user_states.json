@@ -116,45 +116,13 @@
     ]
   },
   "7390867903": {
-    "win_count": 1,
+    "win_count": 0,
     "loss_count": 0,
     "be_count": 0,
     "active_trade": {},
     "tracking_message_id": null,
     "last_signal_time": null,
-    "signal_history": [
-      {
-        "id": 1,
-        "direction": "SELL",
-        "entry_price": 4480.83,
-        "tp1": 4477.83,
-        "tp2": 4476.33,
-        "sl": 4483.83,
-        "timestamp": "2025-12-24T14:43:32.966980+00:00",
-        "result": "PENDING"
-      },
-      {
-        "id": 2,
-        "direction": "BUY",
-        "entry_price": 4465.98,
-        "tp1": 4468.98,
-        "tp2": 4470.48,
-        "sl": 4462.98,
-        "timestamp": "2025-12-24T16:03:49.251857+00:00",
-        "result": "WIN",
-        "closed_at": "2025-12-24T16:07:14.910608+00:00"
-      },
-      {
-        "id": 3,
-        "direction": "BUY",
-        "entry_price": 4475.1,
-        "tp1": 4478.1,
-        "tp2": 4479.6,
-        "sl": 4472.1,
-        "timestamp": "2025-12-24T16:37:19.090906+00:00",
-        "result": "PENDING"
-      }
-    ]
+    "signal_history": []
   },
   "7873001910": {
     "win_count": 0,
@@ -163,57 +131,6 @@
     "active_trade": {},
     "tracking_message_id": null,
     "last_signal_time": null,
-    "signal_history": [
-      {
-        "id": 1,
-        "direction": "BUY",
-        "entry_price": 4488.36,
-        "tp1": 4491.36,
-        "tp2": 4492.86,
-        "sl": 4485.36,
-        "timestamp": "2025-12-24T14:10:45.749770+00:00",
-        "result": "PENDING"
-      },
-      {
-        "id": 2,
-        "direction": "SELL",
-        "entry_price": 4480.83,
-        "tp1": 4477.83,
-        "tp2": 4476.33,
-        "sl": 4483.83,
-        "timestamp": "2025-12-24T14:43:15.810563+00:00",
-        "result": "PENDING"
-      },
-      {
-        "id": 3,
-        "direction": "BUY",
-        "entry_price": 4466.91,
-        "tp1": 4469.91,
-        "tp2": 4471.41,
-        "sl": 4463.91,
-        "timestamp": "2025-12-24T16:29:28.414779+00:00",
-        "result": "PENDING"
-      },
-      {
-        "id": 4,
-        "direction": "BUY",
-        "entry_price": 4468.36,
-        "tp1": 4471.36,
-        "tp2": 4472.86,
-        "sl": 4465.36,
-        "timestamp": "2025-12-24T16:32:00.051170+00:00",
-        "result": "PENDING"
-      },
-      {
-        "id": 5,
-        "direction": "BUY",
-        "entry_price": 4471.5,
-        "tp1": 4474.5,
-        "tp2": 4476.0,
-        "sl": 4468.5,
-        "timestamp": "2025-12-24T16:35:14.274088+00:00",
-        "result": "PENDING"
-      }
-    ]
+    "signal_history": []
   }
 }

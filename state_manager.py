@@ -2,7 +2,7 @@ import json
 import os
 import datetime
 import logging
-from typing import Optional, Any
+from typing import Optional, Any, Union
 
 from config import BotConfig
 
@@ -137,7 +137,7 @@ class StateManager:
         
         return old_stats
     
-    def update_trade_result(self, result_type: str, chat_id: str | int = None) -> None:
+    def update_trade_result(self, result_type: str, chat_id: Optional[Union[str, int]] = None) -> None:
         # If specific chat_id provided, update only that user; otherwise update all
         cids_to_update = [str(chat_id)] if chat_id else self.subscribers
         

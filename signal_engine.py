@@ -366,6 +366,7 @@ class SignalEngine:
         await asyncio.sleep(3)
         
         self.state_manager.current_signal = {}
+        self.last_signal_time = None  # Reset to allow immediate signal search
         for chat_id in self.state_manager.subscribers:
             user_state = self.state_manager.get_user_state(chat_id)
             user_state['active_trade'] = {}
