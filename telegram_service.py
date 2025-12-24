@@ -551,58 +551,46 @@ class TelegramService:
         if not signal_info:
             return
         
-        direction = signal_info['direction']
-        entry = signal_info['entry_price']
-        tp1 = signal_info['tp1_level']
-        tp2 = signal_info['tp2_level']
-        sl = signal_info['sl_level']
-        trade_status = signal_info.get('status', 'active')
-        
-        pnl_str = format_pnl(direction, entry, current_price)
-        
-        # Calculate PnL percentage details
-        if direction == 'BUY':
-            pnl_percent = ((current_price - entry) / entry) * 100
-            max_win_percent = ((tp2 - entry) / entry) * 100
-            max_loss_percent = ((sl - entry) / entry) * 100
-        else:
-            pnl_percent = ((entry - current_price) / entry) * 100
-            max_win_percent = ((entry - tp2) / entry) * 100
-            max_loss_percent = ((entry - sl) / entry) * 100
-        
-        dir_emoji = "📈" if direction == 'BUY' else "📉"
-        status_display = "🛡️ BE Mode" if trade_status == 'tp1_hit' else "🔥 Aktif"
-        
-        # Calculate progress to TP/SL
-        if direction == 'BUY':
-            if pnl_percent >= 0:
-                progress_to_tp2 = (pnl_percent / max_win_percent * 100) if max_win_percent > 0 else 0
-            else:
-                progress_to_sl = (abs(pnl_percent) / abs(max_loss_percent) * 100) if max_loss_percent < 0 else 0
-        else:
-            if pnl_percent >= 0:
-                progress_to_tp2 = (pnl_percent / max_win_percent * 100) if max_win_percent > 0 else 0
-            else:
-                progress_to_sl = (abs(pnl_percent) / abs(max_loss_percent) * 100) if max_loss_percent < 0 else 0
-        
-        tracking_text = (
-            f"📍 *TRACKING UPDATE*\n"
-            f"━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"{dir_emoji} Arah: *{direction}*\n"
-            f"💰 Harga Sekarang: *${current_price:.3f}*\n"
-            f"💵 Entry: ${entry:.3f}\n\n"
-            f"🎯 TP1: ${tp1:.3f}\n"
-            f"🏆 TP2: ${tp2:.3f}\n"
-            f"🛑 SL: ${sl:.3f}\n\n"
-            f"📊 Status: *{status_display}*\n"
-            f"💹 P&L: *{pnl_str}*\n"
-            f"📈 Max Win: {max_win_percent:+.2f}% | 📉 Max Loss: {max_loss_percent:.2f}%"
-        )
-        
         for chat_id in list(self.state_manager.subscribers):
             user_state = self.state_manager.get_user_state(chat_id)
-            if not user_state.get('active_trade'):
+            active_trade = user_state.get('active_trade')
+            if not active_trade:
                 continue
+            
+            direction = active_trade['direction']
+            entry = active_trade['entry_price']
+            tp1 = active_trade['tp1_level']
+            tp2 = active_trade['tp2_level']
+            sl = active_trade['sl_level']
+            trade_status = active_trade.get('status', 'active')
+            
+            pnl_str = format_pnl(direction, entry, current_price)
+            
+            if direction == 'BUY':
+                pnl_percent = ((current_price - entry) / entry) * 100
+                max_win_percent = ((tp2 - entry) / entry) * 100
+                max_loss_percent = ((sl - entry) / entry) * 100
+            else:
+                pnl_percent = ((entry - current_price) / entry) * 100
+                max_win_percent = ((entry - tp2) / entry) * 100
+                max_loss_percent = ((entry - sl) / entry) * 100
+            
+            dir_emoji = "📈" if direction == 'BUY' else "📉"
+            status_display = "🛡️ BE Mode" if trade_status == 'tp1_hit' else "🔥 Aktif"
+            
+            tracking_text = (
+                f"📍 *TRACKING UPDATE*\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"{dir_emoji} Arah: *{direction}*\n"
+                f"💰 Harga Sekarang: *${current_price:.3f}*\n"
+                f"💵 Entry Anda: *${entry:.3f}*\n\n"
+                f"🎯 TP1: ${tp1:.3f}\n"
+                f"🏆 TP2: ${tp2:.3f}\n"
+                f"🛑 SL: ${sl:.3f}\n\n"
+                f"📊 Status: *{status_display}*\n"
+                f"💹 P&L Anda: *{pnl_str}*\n"
+                f"📈 Max Win: {max_win_percent:+.2f}% | 📉 Max Loss: {max_loss_percent:.2f}%"
+            )
             
             try:
                 tracking_msg_id = user_state.get('tracking_message_id')

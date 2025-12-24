@@ -43,29 +43,10 @@
     "win_count": 0,
     "loss_count": 0,
     "be_count": 0,
-    "active_trade": {
-      "direction": "SELL",
-      "entry_price": 4491.71,
-      "tp1_level": 4488.71,
-      "tp2_level": 4487.21,
-      "sl_level": 4494.71,
-      "start_time_utc": "2025-12-24T12:58:29.289447+00:00",
-      "status": "active"
-    },
+    "active_trade": {},
     "tracking_message_id": null,
     "last_signal_time": null,
-    "signal_history": [
-      {
-        "id": 1,
-        "direction": "SELL",
-        "entry_price": 4491.71,
-        "tp1": 4488.71,
-        "tp2": 4487.21,
-        "sl": 4494.71,
-        "timestamp": "2025-12-24T12:58:29.614375+00:00",
-        "result": "PENDING"
-      }
-    ]
+    "signal_history": []
   },
   "7873001910": {
     "win_count": 0,
@@ -74,6 +55,17 @@
     "active_trade": {},
     "tracking_message_id": null,
     "last_signal_time": null,
-    "signal_history": []
+    "signal_history": [
+      {
+        "id": 1,
+        "direction": "BUY",
+        "entry_price": 4491.56,
+        "tp1": 4494.56,
+        "tp2": 4496.06,
+        "sl": 4488.56,
+        "timestamp": "2025-12-24T13:06:50.951851+00:00",
+        "result": "PENDING"
+      }
+    ]
   }
 }

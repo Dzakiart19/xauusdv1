@@ -372,9 +372,15 @@ class SignalEngine:
                         sl = current_signal['sl_level']
                         trade_status = current_signal.get('status', 'active')
                         
-                        bot_logger.info(f"📍 Tracking {direction}: Price=${rt_price:.3f} Entry=${entry:.3f} SL=${sl:.3f}")
+                        bot_logger.info(f"📍 Tracking #{tracking_counter} {direction}: Price=${rt_price:.3f} Entry=${entry:.3f} SL=${sl:.3f}")
                         if self._has_telegram_service() and self.telegram_service:
-                            await self.telegram_service.send_tracking_update(bot, rt_price, current_signal)
+                            try:
+                                await self.telegram_service.send_tracking_update(bot, rt_price, current_signal)
+                                bot_logger.debug(f"✅ Tracking update sent to subscribers")
+                            except Exception as e:
+                                bot_logger.error(f"❌ Failed to send tracking update: {e}")
+                        else:
+                            bot_logger.warning("⚠️ Telegram service not available for tracking")
                         
                         result_info = None
                         
