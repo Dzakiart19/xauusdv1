@@ -43,17 +43,54 @@
     "win_count": 0,
     "loss_count": 0,
     "be_count": 0,
-    "active_trade": {},
+    "active_trade": {
+      "direction": "SELL",
+      "entry_price": 4486.51,
+      "tp1_level": 4483.51,
+      "tp2_level": 4482.01,
+      "sl_level": 4489.51,
+      "start_time_utc": "2025-12-24T13:16:26.494944+00:00",
+      "status": "active"
+    },
     "tracking_message_id": null,
     "last_signal_time": null,
-    "signal_history": []
+    "signal_history": [
+      {
+        "id": 1,
+        "direction": "SELL",
+        "entry_price": 4482.91,
+        "tp1": 4479.91,
+        "tp2": 4478.41,
+        "sl": 4485.91,
+        "timestamp": "2025-12-24T13:14:04.860626+00:00",
+        "result": "PENDING"
+      },
+      {
+        "id": 2,
+        "direction": "SELL",
+        "entry_price": 4486.51,
+        "tp1": 4483.51,
+        "tp2": 4482.01,
+        "sl": 4489.51,
+        "timestamp": "2025-12-24T13:16:26.884437+00:00",
+        "result": "PENDING"
+      }
+    ]
   },
   "7873001910": {
     "win_count": 0,
     "loss_count": 0,
     "be_count": 0,
-    "active_trade": {},
-    "tracking_message_id": null,
+    "active_trade": {
+      "direction": "SELL",
+      "entry_price": 4486.51,
+      "tp1_level": 4483.51,
+      "tp2_level": 4482.01,
+      "sl_level": 4489.51,
+      "start_time_utc": "2025-12-24T13:16:13.553843+00:00",
+      "status": "active"
+    },
+    "tracking_message_id": 8211,
     "last_signal_time": null,
     "signal_history": [
       {
@@ -64,6 +101,26 @@
         "tp2": 4496.06,
         "sl": 4488.56,
         "timestamp": "2025-12-24T13:06:50.951851+00:00",
+        "result": "PENDING"
+      },
+      {
+        "id": 2,
+        "direction": "SELL",
+        "entry_price": 4482.56,
+        "tp1": 4479.56,
+        "tp2": 4478.06,
+        "sl": 4485.56,
+        "timestamp": "2025-12-24T13:13:48.518315+00:00",
+        "result": "PENDING"
+      },
+      {
+        "id": 3,
+        "direction": "SELL",
+        "entry_price": 4486.51,
+        "tp1": 4483.51,
+        "tp2": 4482.01,
+        "sl": 4489.51,
+        "timestamp": "2025-12-24T13:16:13.934686+00:00",
         "result": "PENDING"
       }
     ]
