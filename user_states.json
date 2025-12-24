@@ -45,11 +45,11 @@
     "be_count": 0,
     "active_trade": {
       "direction": "SELL",
-      "entry_price": 4481.69,
-      "tp1_level": 4478.69,
-      "tp2_level": 4477.19,
-      "sl_level": 4484.69,
-      "start_time_utc": "2025-12-24T13:34:00.267591+00:00",
+      "entry_price": 4483.46,
+      "tp1_level": 4480.46,
+      "tp2_level": 4478.96,
+      "sl_level": 4486.46,
+      "start_time_utc": "2025-12-24T13:37:30.786920+00:00",
       "status": "active"
     },
     "tracking_message_id": null,
@@ -58,31 +58,11 @@
       {
         "id": 1,
         "direction": "SELL",
-        "entry_price": 4482.91,
-        "tp1": 4479.91,
-        "tp2": 4478.41,
-        "sl": 4485.91,
-        "timestamp": "2025-12-24T13:14:04.860626+00:00",
-        "result": "PENDING"
-      },
-      {
-        "id": 2,
-        "direction": "SELL",
-        "entry_price": 4486.51,
-        "tp1": 4483.51,
-        "tp2": 4482.01,
-        "sl": 4489.51,
-        "timestamp": "2025-12-24T13:16:26.884437+00:00",
-        "result": "PENDING"
-      },
-      {
-        "id": 3,
-        "direction": "SELL",
-        "entry_price": 4481.69,
-        "tp1": 4478.69,
-        "tp2": 4477.19,
-        "sl": 4484.69,
-        "timestamp": "2025-12-24T13:34:00.652560+00:00",
+        "entry_price": 4483.46,
+        "tp1": 4480.46,
+        "tp2": 4478.96,
+        "sl": 4486.46,
+        "timestamp": "2025-12-24T13:37:31.184406+00:00",
         "result": "PENDING"
       }
     ]
@@ -125,6 +105,16 @@
         "timestamp": "2025-12-24T13:16:13.934686+00:00",
         "result": "WIN",
         "closed_at": "2025-12-24T13:19:58.450969+00:00"
+      },
+      {
+        "id": 4,
+        "direction": "BUY",
+        "entry_price": 4484.68,
+        "tp1": 4487.68,
+        "tp2": 4489.18,
+        "sl": 4481.68,
+        "timestamp": "2025-12-24T13:38:51.422061+00:00",
+        "result": "PENDING"
       }
     ]
   }

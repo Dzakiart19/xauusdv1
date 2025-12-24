@@ -551,7 +551,10 @@ class TelegramService:
         if not signal_info:
             return
         
-        for chat_id in list(self.state_manager.subscribers):
+        subscribers = list(self.state_manager.subscribers)
+        sent_count = 0
+        
+        for chat_id in subscribers:
             user_state = self.state_manager.get_user_state(chat_id)
             active_trade = user_state.get('active_trade')
             if not active_trade:
@@ -618,25 +621,26 @@ class TelegramService:
             
             try:
                 tracking_msg_id = user_state.get('tracking_message_id')
+                sent = False
                 
                 if tracking_msg_id:
+                    # Try to edit existing message
                     try:
-                        await self._safe_send(bot.edit_message_text(
+                        result = await self._safe_send(bot.edit_message_text(
                             chat_id=chat_id,
                             message_id=tracking_msg_id,
                             text=tracking_text,
                             parse_mode='Markdown'
                         ))
-                    except TelegramError:
-                        msg = await self._safe_send(bot.send_message(
-                            chat_id=chat_id,
-                            text=tracking_text,
-                            parse_mode='Markdown'
-                        ))
-                        if msg:
-                            user_state['tracking_message_id'] = msg.message_id
-                            self.state_manager.save_user_states()
-                else:
+                        if result:
+                            sent = True
+                            sent_count += 1
+                    except Exception as e:
+                        logger.debug(f"Edit message failed for {chat_id}, will send new: {e}")
+                        # Fall through to send new message
+                
+                if not sent:
+                    # Send new message
                     msg = await self._safe_send(bot.send_message(
                         chat_id=chat_id,
                         text=tracking_text,
@@ -645,8 +649,12 @@ class TelegramService:
                     if msg:
                         user_state['tracking_message_id'] = msg.message_id
                         self.state_manager.save_user_states()
-            except TelegramError as e:
-                logger.error(f"Failed to send tracking to {chat_id}: {e}")
+                        sent = True
+                        sent_count += 1
+                    else:
+                        logger.warning(f"Failed to send tracking message to {chat_id}")
+            except Exception as e:
+                logger.error(f"Tracking update error for {chat_id}: {e}", exc_info=True)
     
     async def send_daily_summary(self, bot) -> None:
         today_stats = self.state_manager.get_today_stats()
