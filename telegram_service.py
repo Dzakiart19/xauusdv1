@@ -570,27 +570,51 @@ class TelegramService:
                 pnl_percent = ((current_price - entry) / entry) * 100
                 max_win_percent = ((tp2 - entry) / entry) * 100
                 max_loss_percent = ((sl - entry) / entry) * 100
+                tp2_distance = tp2 - current_price
+                tp2_progress = ((current_price - entry) / (tp2 - entry)) * 100 if tp2 != entry else 0
             else:
                 pnl_percent = ((entry - current_price) / entry) * 100
                 max_win_percent = ((entry - tp2) / entry) * 100
                 max_loss_percent = ((entry - sl) / entry) * 100
+                tp2_distance = current_price - tp2
+                tp2_progress = ((entry - current_price) / (entry - tp2)) * 100 if entry != tp2 else 0
             
             dir_emoji = "📈" if direction == 'BUY' else "📉"
-            status_display = "🛡️ BE Mode" if trade_status == 'tp1_hit' else "🔥 Aktif"
             
-            tracking_text = (
-                f"📍 *TRACKING UPDATE*\n"
-                f"━━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"{dir_emoji} Arah: *{direction}*\n"
-                f"💰 Harga Sekarang: *${current_price:.3f}*\n"
-                f"💵 Entry Anda: *${entry:.3f}*\n\n"
-                f"🎯 TP1: ${tp1:.3f}\n"
-                f"🏆 TP2: ${tp2:.3f}\n"
-                f"🛑 SL: ${sl:.3f}\n\n"
-                f"📊 Status: *{status_display}*\n"
-                f"💹 P&L Anda: *{pnl_str}*\n"
-                f"📈 Max Win: {max_win_percent:+.2f}% | 📉 Max Loss: {max_loss_percent:.2f}%"
-            )
+            if trade_status == 'tp1_hit':
+                filled = int(tp2_progress / 10)
+                empty = 10 - filled
+                progress_bar = "█" * filled + "░" * empty
+                tracking_text = (
+                    f"📍 *TRACKING - AWAITING TP2*\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    f"{dir_emoji} Arah: *{direction}*\n"
+                    f"💰 Harga Sekarang: *${current_price:.3f}*\n"
+                    f"💵 Entry Anda: *${entry:.3f}*\n\n"
+                    f"✅ *TP1 SUDAH TERCAPAI!*\n"
+                    f"🎯 TP1: ${tp1:.3f} ✓\n"
+                    f"🏆 Target TP2: ${tp2:.3f}\n"
+                    f"📏 Jarak ke TP2: ${abs(tp2_distance):.3f}\n"
+                    f"📊 Progress: {tp2_progress:.1f}%\n"
+                    f"{progress_bar}\n\n"
+                    f"🛡️ SL (Break Even): ${entry:.3f}\n"
+                    f"💹 P&L Saat Ini: *{pnl_str}*\n"
+                    f"🔒 Min. Profit Terjamin: +$3.00"
+                )
+            else:
+                tracking_text = (
+                    f"📍 *TRACKING UPDATE*\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    f"{dir_emoji} Arah: *{direction}*\n"
+                    f"💰 Harga Sekarang: *${current_price:.3f}*\n"
+                    f"💵 Entry Anda: *${entry:.3f}*\n\n"
+                    f"🎯 TP1: ${tp1:.3f}\n"
+                    f"🏆 TP2: ${tp2:.3f}\n"
+                    f"🛑 SL: ${sl:.3f}\n\n"
+                    f"📊 Status: *🔥 Aktif*\n"
+                    f"💹 P&L Anda: *{pnl_str}*\n"
+                    f"📈 Max Win: {max_win_percent:+.2f}% | 📉 Max Loss: {max_loss_percent:.2f}%"
+                )
             
             try:
                 tracking_msg_id = user_state.get('tracking_message_id')
