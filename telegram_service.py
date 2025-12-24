@@ -609,7 +609,17 @@ class TelegramService:
             status_emoji = strat_status.get('emoji', '❓')
             status_name = strat_status.get('status', 'UNKNOWN')
             status_desc = strat_status.get('description', '')
-            status_section = f"📊 Status: {status_emoji} *{status_name}*\n" if strat_status else ""
+            
+            # Determine BUY/SELL/NO TRADE indicator
+            trade_signal = "⚠️ NO TRADE"
+            if "BUY SETUP" in status_name:
+                trade_signal = "🟢 BUY READY"
+            elif "SELL SETUP" in status_name:
+                trade_signal = "🔴 SELL READY"
+            elif "POSITION ACTIVE" in status_name:
+                trade_signal = "🟣 POSITION ACTIVE"
+            
+            status_section = f"📊 Status: {status_emoji} *{status_name}*\n└ {trade_signal}\n" if strat_status else ""
             
             await query.edit_message_text(
                 f"⚙️ *Info Sistem Bot V2.0 Pro*\n"
