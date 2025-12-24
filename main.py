@@ -1,6 +1,7 @@
 import asyncio
 import signal
 import sys
+import os
 
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler
 from telegram.error import Conflict
@@ -187,6 +188,14 @@ async def main():
             state_manager.save_user_states()
             state_manager.save_subscribers()
             state_manager.save_signal_history()
+            
+            # Auto-delete log file on graceful shutdown
+            try:
+                if os.path.exists(BotConfig.LOG_FILENAME):
+                    os.remove(BotConfig.LOG_FILENAME)
+                    bot_logger.info(f"🗑️ Log file deleted: {BotConfig.LOG_FILENAME}")
+            except Exception as e:
+                bot_logger.warning(f"⚠️ Could not delete log file: {e}")
             
             bot_logger.info("👋 Bot stopped successfully")
 

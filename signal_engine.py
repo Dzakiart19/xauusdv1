@@ -636,10 +636,16 @@ class SignalEngine:
                                 'status': 'AKTIF'
                             })
                             self.state_manager.clear_user_tracking_messages()
+                            
+                            # Log signal distribution
+                            subscriber_count = len(self.state_manager.subscribers)
+                            bot_logger.info(f"✅ Sinyal {final_signal} dikirim ke {subscriber_count} subscribers! Mode pelacakan aktif.")
+                            for sub_id in self.state_manager.subscribers:
+                                bot_logger.debug(f"  → Sinyal dikirim ke user: {sub_id}")
+                            
                             rt_price = await self.get_realtime_price()
                             if rt_price and self._has_telegram_service() and self.telegram_service:
                                 await self.telegram_service.send_tracking_update(bot, rt_price, self.state_manager.current_signal)
-                            bot_logger.info("✅ Sinyal Scalping berhasil dikirim! Mode pelacakan aktif.")
                     else:
                         bot_logger.info("🔍 Belum ada kondisi entry scalping. Terus mencari...")
                 

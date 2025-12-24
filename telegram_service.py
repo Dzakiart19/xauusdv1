@@ -90,6 +90,15 @@ class TelegramService:
             return
         chat_id = str(update.message.chat_id)
         
+        # Validate that chat_id is numeric
+        if not chat_id.isdigit():
+            await update.message.reply_text(
+                "❌ *Error*\n\n"
+                "Invalid chat ID format. This shouldn't happen normally.",
+                parse_mode='Markdown'
+            )
+            return
+        
         if self.state_manager.is_subscriber(chat_id):
             await update.message.reply_text(
                 "✅ Anda sudah berlangganan!\n\n"
@@ -503,6 +512,12 @@ class TelegramService:
                 logger.error(f"Failed to read photo {photo_path}: {e}")
         
         async def send_to_one(chat_id: str, photo_data: Optional[bytes]):
+            # Validate chat_id is numeric (not placeholder)
+            if not str(chat_id).isdigit():
+                logger.warning(f"⚠️ Skipping invalid subscriber ID: {chat_id}")
+                self.state_manager.remove_subscriber(chat_id)
+                return (chat_id, False, "invalid_id")
+            
             try:
                 if photo_data:
                     await self._safe_send(bot.send_photo(
@@ -553,8 +568,16 @@ class TelegramService:
         
         subscribers = list(self.state_manager.subscribers)
         sent_count = 0
+        failed_users = []
         
         for chat_id in subscribers:
+            # Validate chat_id is numeric (not placeholder like "user1", "user2")
+            if not str(chat_id).isdigit():
+                logger.warning(f"⚠️ Skipping invalid subscriber ID: {chat_id}")
+                failed_users.append(chat_id)
+                self.state_manager.remove_subscriber(chat_id)
+                continue
+            
             user_state = self.state_manager.get_user_state(chat_id)
             active_trade = user_state.get('active_trade')
             if not active_trade:
@@ -652,7 +675,8 @@ class TelegramService:
                         sent = True
                         sent_count += 1
                     else:
-                        logger.warning(f"Failed to send tracking message to {chat_id}")
+                        logger.warning(f"⚠️ Failed to send tracking message to {chat_id}")
+                        failed_users.append(chat_id)
             except Exception as e:
                 logger.error(f"Tracking update error for {chat_id}: {e}", exc_info=True)
     
