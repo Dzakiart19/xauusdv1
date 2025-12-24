@@ -11,7 +11,7 @@ from state_manager import StateManager
 from telegram_service import TelegramService
 from signal_engine import SignalEngine
 from health_server import HealthServer, self_ping_loop
-from utils import bot_logger
+from utils import bot_logger, cleanup_logging
 
 
 class GracefulShutdown:
@@ -39,6 +39,9 @@ class GracefulShutdown:
         self.shutdown_event.set()
         
         bot_logger.info("✅ Graceful shutdown complete")
+        
+        # Cleanup logging and delete log file
+        cleanup_logging()
 
 
 shutdown_handler = GracefulShutdown()

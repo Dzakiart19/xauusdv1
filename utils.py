@@ -17,6 +17,13 @@ class NoHttpxFilter(logging.Filter):
 
 
 def setup_logging() -> logging.Logger:
+    # Delete old log file on startup
+    if os.path.exists(BotConfig.LOG_FILENAME):
+        try:
+            os.remove(BotConfig.LOG_FILENAME)
+        except Exception as e:
+            print(f"Warning: Could not delete old log file: {e}")
+    
     bot_logger = logging.getLogger("BotScalping")
     bot_logger.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -36,6 +43,23 @@ def setup_logging() -> logging.Logger:
     logging.getLogger("aiohttp").setLevel(logging.WARNING)
     
     return bot_logger
+
+
+def cleanup_logging() -> None:
+    """Clean up log handlers and optionally delete log file"""
+    bot_logger = logging.getLogger("BotScalping")
+    # Close all file handlers
+    for handler in bot_logger.handlers[:]:
+        if isinstance(handler, logging.FileHandler):
+            handler.close()
+            bot_logger.removeHandler(handler)
+    
+    # Delete log file on shutdown
+    if os.path.exists(BotConfig.LOG_FILENAME):
+        try:
+            os.remove(BotConfig.LOG_FILENAME)
+        except Exception as e:
+            print(f"Warning: Could not delete log file: {e}")
 
 
 bot_logger = setup_logging()
