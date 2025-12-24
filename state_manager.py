@@ -16,6 +16,7 @@ class StateManager:
         self.subscribers: set[str] = set()
         self.current_signal: dict = {}
         self.last_signal_info: dict = {}
+        self.current_indicators: dict = {}  # Real-time RSI, EMA, ADX
         self.signal_history: list[dict] = []
         self._load_signal_history()
     
@@ -189,6 +190,15 @@ class StateManager:
     
     def update_current_signal(self, signal_info: dict) -> None:
         self.current_signal = signal_info
+    
+    def update_current_indicators(self, rsi: float, ema: float, adx: float) -> None:
+        """Store current indicator values for real-time display"""
+        self.current_indicators = {
+            'rsi': rsi,
+            'ema': ema,
+            'adx': adx,
+            'timestamp': datetime.datetime.now(datetime.timezone.utc)
+        }
     
     def clear_current_signal(self) -> None:
         self.current_signal = {}

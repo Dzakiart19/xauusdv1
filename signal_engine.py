@@ -624,6 +624,8 @@ class SignalEngine:
                         continue
                     
                     bot_logger.info(f"📊 Analysis: Price=${latest_close:.3f}, EMA50=${ema50_value:.3f}, RSI={rsi_value:.1f} (prev={prev_rsi_value:.1f}), ADX={adx_value:.1f}")
+                    # Update real-time indicators for /info command
+                    self.state_manager.update_current_indicators(rsi_value, ema50_value, adx_value)
                     
                     final_signal = None
                     

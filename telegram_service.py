@@ -232,6 +232,12 @@ class TelegramService:
         
         today_stats = self.state_manager.get_today_stats(chat_id)
         
+        # Real-time indicators
+        indicators = self.state_manager.current_indicators
+        rsi_str = f"{indicators.get('rsi', 0):.1f}" if indicators else "N/A"
+        ema_str = f"${indicators.get('ema', 0):.3f}" if indicators else "N/A"
+        adx_str = f"{indicators.get('adx', 0):.1f}" if indicators else "N/A"
+        
         await update.message.reply_text(
             f"⚙️ *Info Sistem Bot V2.0 Pro*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -239,6 +245,10 @@ class TelegramService:
             f"🏷️ Symbol: {gold_symbol or 'frxXAUUSD'}\n"
             f"💰 Harga Terakhir: {price_str}\n"
             f"👥 Total Subscriber: {subscriber_count}\n\n"
+            f"📊 *Strategi Real-Time (EMA50 + RSI(3) + ADX(55)):*\n"
+            f"├ 📈 RSI: *{rsi_str}*\n"
+            f"├ 💹 EMA50: *{ema_str}*\n"
+            f"└ 💪 ADX: *{adx_str}*\n\n"
             f"{market_info}\n\n"
             f"📊 *Statistik Hari Ini (Anda):*\n"
             f"├ Sinyal: {today_stats['total']}\n"
