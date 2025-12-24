@@ -553,6 +553,83 @@ class TelegramService:
                 f"{rate_emoji} Win Rate: *{win_rate:.1f}%*",
                 parse_mode='Markdown'
             )
+        
+        elif query.data == "send_signal":
+            await query.answer("⏳ Generating manual signal...", show_alert=False)
+            signal_engine = context.bot_data.get('signal_engine')
+            
+            if not signal_engine:
+                await query.edit_message_text(
+                    "❌ *Error*\n\n"
+                    "Signal engine tidak tersedia.",
+                    parse_mode='Markdown'
+                )
+                return
+            
+            # Generate manual signal for this user only
+            success = await signal_engine.generate_manual_signal(context.bot, target_chat_id=chat_id)
+            
+            if success:
+                await query.edit_message_text(
+                    "✅ *Signal Manual Berhasil Dibuat!*\n\n"
+                    "📊 Signal dikirim ke Anda saja.\n"
+                    "📍 Gunakan /dashboard untuk tracking real-time.",
+                    parse_mode='Markdown'
+                )
+            else:
+                await query.edit_message_text(
+                    "❌ *Gagal Membuat Signal*\n\n"
+                    "Ada masalah saat menganalisis data pasar.\n"
+                    "Coba lagi dalam beberapa detik.",
+                    parse_mode='Markdown'
+                )
+        
+        elif query.data == "info":
+            deriv_ws = self.deriv_ws_getter()
+            gold_symbol = self.gold_symbol_getter()
+            
+            status = "🟢 Terhubung" if (deriv_ws and deriv_ws.connected) else "🔴 Terputus"
+            current_price = deriv_ws.get_current_price() if deriv_ws else None
+            price_str = f"${current_price:.3f}" if current_price else "N/A"
+            subscriber_count = len(self.state_manager.subscribers)
+            
+            market_status = BotConfig.get_market_status()
+            market_info = f"📅 Market: *{market_status['status']}*"
+            
+            today_stats = self.state_manager.get_today_stats(chat_id)
+            
+            # Real-time indicators
+            indicators = self.state_manager.current_indicators
+            rsi_str = f"{indicators.get('rsi', 0):.1f}" if indicators else "N/A"
+            ema_str = f"${indicators.get('ema', 0):.3f}" if indicators else "N/A"
+            adx_str = f"{indicators.get('adx', 0):.1f}" if indicators else "N/A"
+            
+            # Strategy status
+            strat_status = self.state_manager.strategy_status
+            status_emoji = strat_status.get('emoji', '❓')
+            status_name = strat_status.get('status', 'UNKNOWN')
+            status_desc = strat_status.get('description', '')
+            status_section = f"📊 Status: {status_emoji} *{status_name}*\n" if strat_status else ""
+            
+            await query.edit_message_text(
+                f"⚙️ *Info Sistem Bot V2.0 Pro*\n"
+                f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"📡 WebSocket: {status}\n"
+                f"🏷️ Symbol: {gold_symbol or 'frxXAUUSD'}\n"
+                f"💰 Harga: {price_str}\n"
+                f"👥 Subscribers: {subscriber_count}\n\n"
+                f"{status_section}"
+                f"📊 *Indikator Real-Time:*\n"
+                f"├ 📈 RSI: *{rsi_str}*\n"
+                f"├ 💹 EMA50: *{ema_str}*\n"
+                f"└ 💪 ADX: *{adx_str}*\n\n"
+                f"{market_info}\n\n"
+                f"📊 *Hari Ini:*\n"
+                f"├ Sinyal: {today_stats['total']}\n"
+                f"├ Win: {today_stats['wins']} | Loss: {today_stats['losses']}\n"
+                f"└ Win Rate: {today_stats['win_rate']:.1f}%",
+                parse_mode='Markdown'
+            )
     
     async def send_to_one_subscriber(self, bot, chat_id: str | int, text: str) -> bool:
         """Send message to ONE specific subscriber (per-user tracking/results)"""
