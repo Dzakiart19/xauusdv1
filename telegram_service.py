@@ -27,6 +27,7 @@ class TelegramService:
         self._rate_limit_lock = asyncio.Lock()
         self._last_send_time = 0.0
         self._last_tracking_price = {}  # Track last price per user
+        self._last_tracking_signal_id = {}  # Track which signal is being followed
         self._tracking_update_counter = 0  # Force update every N calls
     
     async def _safe_send(self, coro):
@@ -756,17 +757,31 @@ class TelegramService:
             user_state = self.state_manager.get_user_state(chat_id)
             active_trade = user_state.get('active_trade')
             if not active_trade:
+                # Clear tracking data when trade ends
+                self._last_tracking_price.pop(chat_id, None)
+                self._last_tracking_signal_id.pop(chat_id, None)
                 continue
             
-            # Debounce: Skip if price hasn't changed much and not time for forced update
-            last_price = self._last_tracking_price.get(chat_id)
-            price_delta = abs(current_price - last_price) if last_price else float('inf')
-            should_update = force_update or price_delta >= BotConfig.TRACKING_PRICE_DELTA
+            # Get signal ID to detect when new trade starts (use entry price + direction)
+            current_signal_id = f"{active_trade.get('entry_price'):.3f}-{active_trade.get('direction')}"
+            last_signal_id = self._last_tracking_signal_id.get(chat_id)
+            is_new_signal = current_signal_id != last_signal_id
             
-            if last_price is not None and not should_update:
-                continue  # Skip this user, price hasn't changed enough
-            
-            self._last_tracking_price[chat_id] = current_price  # Update last price
+            # ALWAYS send first message for new signal
+            if is_new_signal:
+                self._last_tracking_signal_id[chat_id] = current_signal_id
+                self._last_tracking_price[chat_id] = current_price
+                # Continue to send (don't skip)
+            else:
+                # Debounce: Skip if price hasn't changed much and not time for forced update
+                last_price = self._last_tracking_price.get(chat_id)
+                price_delta = abs(current_price - last_price) if last_price else float('inf')
+                should_update = force_update or price_delta >= BotConfig.TRACKING_PRICE_DELTA
+                
+                if last_price is not None and not should_update:
+                    continue  # Skip this user, price hasn't changed enough
+                
+                self._last_tracking_price[chat_id] = current_price  # Update last price
             
             direction = active_trade['direction']
             entry = active_trade['entry_price']
