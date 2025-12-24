@@ -7,7 +7,7 @@ import logging
 from typing import Optional, TYPE_CHECKING
 
 from config import BotConfig
-from utils import calculate_indicators, generate_chart, bot_logger
+from utils import calculate_indicators, bot_logger
 from deriv_ws import DerivWebSocket
 
 if TYPE_CHECKING:
@@ -165,7 +165,7 @@ class SignalEngine:
             }
             
             caption = (
-                f"{signal_emoji} *SCALPING {final_signal} XAU/USD* (MANUAL)\n"
+                f"{signal_emoji} *SCALPING {final_signal} XAU/USD*\n"
                 f"━━━━━━━━━━━━━━━━━━━━━\n"
                 f"🌐 _Strategi: EMA50 + RSI5 + ADX55_\n\n"
                 f"🕐 Waktu: *{start_time_utc.astimezone(BotConfig.WIB_TZ).strftime('%H:%M:%S WIB')}*\n"
@@ -182,51 +182,29 @@ class SignalEngine:
                 f"📡 Tracking aktif hingga TP/SL tercapai"
             )
             
-            if BotConfig.GENERATE_CHARTS:
-                chart_generated = await generate_chart(df, temp_trade_info, title)
-            else:
-                chart_generated = True
-            
-            if chart_generated:
-                if BotConfig.GENERATE_CHARTS:
-                    photo_sent = await self.send_photo(bot, caption)
-                else:
-                    if self._has_telegram_service() and self.telegram_service:
-                        await self.telegram_service.send_to_all_subscribers(bot, caption)
-                    photo_sent = True
-                
-                if photo_sent:
-                    self._record_signal(temp_trade_info)
-                    self.state_manager.update_current_signal(temp_trade_info)
-                    self.state_manager.set_active_trade_for_subscribers(temp_trade_info)
-                    self.state_manager.update_last_signal_info({
-                        'direction': final_signal,
-                        'entry_price': latest_close,
-                        'tp1_level': tp1,
-                        'tp2_level': tp2,
-                        'sl_level': sl,
-                        'time': start_time_utc.astimezone(BotConfig.WIB_TZ).strftime('%H:%M:%S WIB'),
-                        'status': 'AKTIF'
-                    })
-                    self.state_manager.clear_user_tracking_messages()
-                    bot_logger.info(f"✅ Manual signal {final_signal} generated successfully!")
-                    return True
+            if self._has_telegram_service() and self.telegram_service:
+                await self.telegram_service.send_to_all_subscribers(bot, caption)
+                self._record_signal(temp_trade_info)
+                self.state_manager.update_current_signal(temp_trade_info)
+                self.state_manager.set_active_trade_for_subscribers(temp_trade_info)
+                self.state_manager.update_last_signal_info({
+                    'direction': final_signal,
+                    'entry_price': latest_close,
+                    'tp1_level': tp1,
+                    'tp2_level': tp2,
+                    'sl_level': sl,
+                    'time': start_time_utc.astimezone(BotConfig.WIB_TZ).strftime('%H:%M:%S WIB'),
+                    'status': 'AKTIF'
+                })
+                self.state_manager.clear_user_tracking_messages()
+                bot_logger.info(f"✅ Manual signal {final_signal} generated successfully!")
+                return True
             
             return False
         except Exception as e:
             bot_logger.error(f"❌ Manual signal error: {e}", exc_info=True)
             return False
     
-    async def send_photo(self, bot, caption: str) -> bool:
-        if os.path.exists(BotConfig.CHART_FILENAME) and self._has_telegram_service() and self.telegram_service:
-            await self.telegram_service.send_to_all_subscribers(bot, caption, BotConfig.CHART_FILENAME)
-            try:
-                os.remove(BotConfig.CHART_FILENAME)
-                bot_logger.info(f"🗑️ Chart deleted: {BotConfig.CHART_FILENAME}")
-            except Exception as e:
-                bot_logger.warning(f"Failed to delete chart: {e}")
-            return True
-        return False
     
     async def notify_restart(self, bot) -> None:
         if not self._has_telegram_service() or not self.telegram_service:
@@ -594,39 +572,30 @@ class SignalEngine:
                             f"📡 Tracking aktif hingga TP/SL tercapai"
                         )
                         
-                        if BotConfig.GENERATE_CHARTS:
-                            chart_generated = await generate_chart(df, temp_trade_info, title)
-                        else:
-                            chart_generated = True
-                            bot_logger.info("📊 Chart generation disabled (GENERATE_CHARTS=false)")
+                        photo_sent = False
+                        if self._has_telegram_service() and self.telegram_service:
+                            await self.telegram_service.send_to_all_subscribers(bot, caption)
+                            photo_sent = True
                         
-                        if chart_generated:
-                            if BotConfig.GENERATE_CHARTS:
-                                photo_sent = await self.send_photo(bot, caption)
-                            else:
-                                if self._has_telegram_service() and self.telegram_service:
-                                    await self.telegram_service.send_to_all_subscribers(bot, caption)
-                                photo_sent = True
+                        if photo_sent:
+                            self._record_signal(temp_trade_info)
+                            self.state_manager.update_current_signal(temp_trade_info)
+                            self.state_manager.set_active_trade_for_subscribers(temp_trade_info)
                             
-                            if photo_sent:
-                                self._record_signal(temp_trade_info)
-                                self.state_manager.update_current_signal(temp_trade_info)
-                                self.state_manager.set_active_trade_for_subscribers(temp_trade_info)
-                                
-                                self.state_manager.update_last_signal_info({
-                                    'direction': final_signal,
-                                    'entry_price': latest_close,
-                                    'tp1_level': tp1,
-                                    'tp2_level': tp2,
-                                    'sl_level': sl,
-                                    'time': start_time_utc.astimezone(BotConfig.WIB_TZ).strftime('%H:%M:%S WIB'),
-                                    'status': 'AKTIF'
-                                })
-                                self.state_manager.clear_user_tracking_messages()
-                                rt_price = await self.get_realtime_price()
-                                if rt_price and self._has_telegram_service() and self.telegram_service:
-                                    await self.telegram_service.send_tracking_update(bot, rt_price, self.state_manager.current_signal)
-                                bot_logger.info("✅ Sinyal Scalping berhasil dikirim! Mode pelacakan aktif.")
+                            self.state_manager.update_last_signal_info({
+                                'direction': final_signal,
+                                'entry_price': latest_close,
+                                'tp1_level': tp1,
+                                'tp2_level': tp2,
+                                'sl_level': sl,
+                                'time': start_time_utc.astimezone(BotConfig.WIB_TZ).strftime('%H:%M:%S WIB'),
+                                'status': 'AKTIF'
+                            })
+                            self.state_manager.clear_user_tracking_messages()
+                            rt_price = await self.get_realtime_price()
+                            if rt_price and self._has_telegram_service() and self.telegram_service:
+                                await self.telegram_service.send_tracking_update(bot, rt_price, self.state_manager.current_signal)
+                            bot_logger.info("✅ Sinyal Scalping berhasil dikirim! Mode pelacakan aktif.")
                     else:
                         bot_logger.info("🔍 Belum ada kondisi entry scalping. Terus mencari...")
                 

@@ -102,7 +102,6 @@ class HealthServer:
             },
             "config": {
                 "analysis_interval": BotConfig.ANALYSIS_INTERVAL,
-                "charts_enabled": BotConfig.GENERATE_CHARTS,
                 "unlimited_signals": BotConfig.UNLIMITED_SIGNALS,
             }
         })

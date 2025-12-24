@@ -143,7 +143,6 @@ async def main():
         bot_logger.info("🚀 Bot dimulai! Otomatis mencari sinyal 24 jam...")
         bot_logger.info(f"🌐 Health server aktif di port {BotConfig.PORT}")
         bot_logger.info(f"📊 Unlimited Signals: {BotConfig.UNLIMITED_SIGNALS}")
-        bot_logger.info(f"📈 Chart Generation: {BotConfig.GENERATE_CHARTS}")
         
         signal_task = asyncio.create_task(signal_engine.run(application.bot))
         

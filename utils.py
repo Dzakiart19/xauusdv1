@@ -7,7 +7,6 @@ from functools import wraps
 
 import pandas as pd
 import pandas_ta as ta
-import mplfinance as mpf
 
 from config import BotConfig
 
@@ -70,84 +69,6 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df.ta.adx(length=BotConfig.ADX_FILTER_PERIOD, append=True)
     df.ta.atr(length=BotConfig.ATR_PERIOD, append=True)
     return df
-
-
-async def generate_chart(df: pd.DataFrame, trade_info: Optional[dict] = None, title: str = "XAU/USD Scalping") -> bool:
-    try:
-        if len(df) < 50:
-            bot_logger.warning("Not enough data for chart generation")
-            return False
-        
-        chart_df = df.tail(100).copy()
-        
-        chart_style = mpf.make_mpf_style(
-            base_mpf_style='charles',
-            gridstyle='-',
-            gridcolor='#2c3e50',
-            facecolor='#1a1a2e',
-            edgecolor='#ffffff',
-            figcolor='#1a1a2e',
-            rc={
-                'axes.labelcolor': '#ffffff',
-                'axes.edgecolor': '#ffffff',
-                'xtick.color': '#ffffff',
-                'ytick.color': '#ffffff',
-                'text.color': '#ffffff',
-                'figure.titlesize': 14,
-                'axes.titlesize': 12
-            }
-        )
-        
-        hlines_dict = None
-        if trade_info:
-            entry = trade_info.get('entry_price')
-            tp1 = trade_info.get('tp1_level')
-            tp2 = trade_info.get('tp2_level')
-            sl = trade_info.get('sl_level')
-            
-            if all([entry, tp1, tp2, sl]):
-                hlines_dict = {
-                    'hlines': [entry, tp1, tp2, sl],
-                    'colors': ['#3498db', '#27ae60', '#9b59b6', '#e74c3c'],
-                    'linestyle': ['--', '-', '-', '-'],
-                    'linewidths': [1.5, 1.2, 1.2, 1.2]
-                }
-        
-        fig, axes = mpf.plot(
-            chart_df,
-            type='candle',
-            style=chart_style,
-            title=title,
-            ylabel='Harga (USD)',
-            volume=False,
-            figsize=(12, 8),
-            hlines=hlines_dict,
-            returnfig=True,
-            tight_layout=True
-        )
-        
-        if trade_info and hlines_dict:
-            ax = axes[0]
-            entry = trade_info.get('entry_price')
-            tp1 = trade_info.get('tp1_level')
-            tp2 = trade_info.get('tp2_level')
-            sl = trade_info.get('sl_level')
-            
-            text_x = len(chart_df) * 1.01
-            ax.text(text_x, entry, f'Entry ${entry:.2f}', color='#3498db', fontsize=8, va='center')
-            ax.text(text_x, tp1, f'TP1 ${tp1:.2f}', color='#27ae60', fontsize=8, va='center')
-            ax.text(text_x, tp2, f'TP2 ${tp2:.2f}', color='#9b59b6', fontsize=8, va='center')
-            ax.text(text_x, sl, f'SL ${sl:.2f}', color='#e74c3c', fontsize=8, va='center')
-        
-        fig.savefig(BotConfig.CHART_FILENAME, dpi=150, bbox_inches='tight', facecolor='#1a1a2e')
-        import matplotlib.pyplot as plt
-        plt.close(fig)
-        
-        return True
-        
-    except Exception as e:
-        bot_logger.error(f"Chart generation failed: {e}")
-        return False
 
 
 def format_pnl(direction: str, entry: float, current_price: Optional[float]) -> str:

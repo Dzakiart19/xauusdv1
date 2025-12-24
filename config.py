@@ -7,7 +7,6 @@ class BotConfig:
     TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', 'YOUR_BOT_TOKEN')
     ADMIN_CHAT_ID = os.environ.get('ADMIN_CHAT_ID', '')
     PORT = int(os.environ.get('PORT', 5000))
-    GENERATE_CHARTS = os.environ.get('GENERATE_CHARTS', 'true').lower() == 'true'
     KEEP_ALIVE_INTERVAL = int(os.environ.get('KEEP_ALIVE_INTERVAL', 300))
     
     MA_MEDIUM_PERIOD = 50
@@ -34,7 +33,6 @@ class BotConfig:
     UNLIMITED_SIGNALS = True
     SIGNAL_COOLDOWN_SECONDS = 120
     
-    CHART_FILENAME = 'chart_scalping.png'
     USER_STATES_FILENAME = 'user_states.json'
     SUBSCRIBERS_FILENAME = 'subscribers.json'
     SIGNAL_HISTORY_FILENAME = 'signal_history.json'
