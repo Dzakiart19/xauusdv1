@@ -19,7 +19,7 @@ class BotConfig:
     RSI_EXIT_OVERBOUGHT = 77
     
     ADX_FILTER_PERIOD = 55
-    ADX_FILTER_THRESHOLD = 30
+    ADX_FILTER_THRESHOLD = 15  # Lowered for more signal generation in current market conditions
     
     FIXED_SL_USD = 3.0
     FIXED_TP_USD = 3.0

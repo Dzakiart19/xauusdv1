@@ -122,7 +122,18 @@
     "active_trade": {},
     "tracking_message_id": null,
     "last_signal_time": null,
-    "signal_history": []
+    "signal_history": [
+      {
+        "id": 1,
+        "direction": "SELL",
+        "entry_price": 4480.83,
+        "tp1": 4477.83,
+        "tp2": 4476.33,
+        "sl": 4483.83,
+        "timestamp": "2025-12-24T14:43:32.966980+00:00",
+        "result": "PENDING"
+      }
+    ]
   },
   "7873001910": {
     "win_count": 0,
@@ -140,6 +151,16 @@
         "tp2": 4492.86,
         "sl": 4485.36,
         "timestamp": "2025-12-24T14:10:45.749770+00:00",
+        "result": "PENDING"
+      },
+      {
+        "id": 2,
+        "direction": "SELL",
+        "entry_price": 4480.83,
+        "tp1": 4477.83,
+        "tp2": 4476.33,
+        "sl": 4483.83,
+        "timestamp": "2025-12-24T14:43:15.810563+00:00",
         "result": "PENDING"
       }
     ]
