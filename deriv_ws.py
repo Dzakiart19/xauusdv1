@@ -6,6 +6,7 @@ import time
 from typing import Callable, Optional, Any
 import websockets
 from collections import deque
+from config import BotConfig
 
 logger = logging.getLogger("DerivWS")
 
@@ -84,6 +85,40 @@ class DerivWebSocket:
                 logger.error(f"Connection failed: {e}. (attempt {self.reconnect_attempts}/{self.max_reconnect_attempts})")
         
         logger.critical("Max reconnection attempts reached")
+        return False
+
+    async def authenticate(self) -> bool:
+        """Authenticate with Deriv API if token is provided"""
+        if not self.connected or not self.ws:
+            return False
+        
+        if not BotConfig.DERIV_API_TOKEN:
+            logger.warning("⚠️ No DERIV_API_TOKEN found - using demo mode (may have limited data)")
+            return True
+        
+        try:
+            request = {
+                "authorize": BotConfig.DERIV_API_TOKEN
+            }
+            await self.ws.send(json.dumps(request))
+            
+            # Wait for auth response
+            response = await asyncio.wait_for(self.ws.recv(), timeout=10)
+            data = json.loads(response)
+            
+            if "authorize" in data and data["authorize"]["loginid"]:
+                logger.info(f"✅ Authenticated with Deriv account: {data['authorize']['loginid']}")
+                return True
+            elif "error" in data:
+                logger.error(f"Authentication failed: {data['error'].get('message', 'Unknown error')}")
+                return False
+        except asyncio.TimeoutError:
+            logger.error("Authentication timeout")
+            return False
+        except Exception as e:
+            logger.error(f"Authentication error: {e}")
+            return False
+        
         return False
 
     async def subscribe_ticks(self, symbol: str = XAUUSD_SYMBOL) -> bool:

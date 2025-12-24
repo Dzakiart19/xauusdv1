@@ -6,6 +6,7 @@ import pytz
 class BotConfig:
     TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', 'YOUR_BOT_TOKEN')
     ADMIN_CHAT_ID = os.environ.get('ADMIN_CHAT_ID', '')
+    DERIV_API_TOKEN = os.environ.get('DERIV_API_TOKEN', '')
     PORT = int(os.environ.get('PORT', 5000))
     KEEP_ALIVE_INTERVAL = int(os.environ.get('KEEP_ALIVE_INTERVAL', 300))
     
