@@ -212,9 +212,12 @@ class SignalEngine:
                         'result': 'PENDING'
                     })
                     self.state_manager.save_user_states()
+                    # SET active_trade FOR ALL SUBSCRIBERS SO TRACKING WORKS FOR EVERYONE
+                    self.state_manager.set_active_trade_for_subscribers(temp_trade_info)
                     # SET current_signal SO TRACKING LOOP WORKS FOR MANUAL SIGNAL
                     self.state_manager.update_current_signal(temp_trade_info)
-                    bot_logger.info(f"✅ Manual signal {final_signal} sent to user {target_chat_id} only! Starting tracking...")
+                    self.state_manager.clear_user_tracking_messages()
+                    bot_logger.info(f"✅ Manual signal {final_signal} sent to user {target_chat_id}! Broadcasting tracking to ALL subscribers...")
                 else:
                     # Broadcast to all subscribers
                     await self.telegram_service.send_to_all_subscribers(bot, caption)
