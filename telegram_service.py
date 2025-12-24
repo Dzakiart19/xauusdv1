@@ -281,6 +281,8 @@ class TelegramService:
         if not update.message:
             return
         
+        chat_id = str(update.message.chat_id)
+        
         await update.message.reply_text(
             "🔄 *Generating manual signal...*\n\n"
             "Tunggu sebentar, bot sedang menganalisis pasar dan membuat signal.",
@@ -298,12 +300,13 @@ class TelegramService:
             )
             return
         
-        success = await signal_engine.generate_manual_signal(context.bot)
+        # Pass chat_id so signal only goes to this user
+        success = await signal_engine.generate_manual_signal(context.bot, target_chat_id=chat_id)
         
         if success:
             await update.message.reply_text(
                 "✅ *Signal Manual Berhasil Dibuat!*\n\n"
-                "Signal sudah dikirim ke semua subscriber.\n"
+                "Signal dikirim ke Anda saja.\n"
                 "📍 Gunakan /dashboard untuk tracking.",
                 parse_mode='Markdown'
             )

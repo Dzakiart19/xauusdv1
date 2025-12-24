@@ -117,8 +117,13 @@ class SignalEngine:
             return self.deriv_ws.get_current_price()
         return None
     
-    async def generate_manual_signal(self, bot) -> bool:
-        """Generate signal manually regardless of market conditions"""
+    async def generate_manual_signal(self, bot, target_chat_id: Optional[str] = None) -> bool:
+        """Generate signal manually regardless of market conditions
+        
+        Args:
+            bot: Telegram bot instance
+            target_chat_id: If provided, send only to this user. If None, broadcast to all.
+        """
         try:
             df = await self.get_historical_data()
             if df is None:
@@ -183,21 +188,49 @@ class SignalEngine:
             )
             
             if self._has_telegram_service() and self.telegram_service:
-                await self.telegram_service.send_to_all_subscribers(bot, caption)
-                self._record_signal(temp_trade_info)
-                self.state_manager.update_current_signal(temp_trade_info)
-                self.state_manager.set_active_trade_for_subscribers(temp_trade_info)
-                self.state_manager.update_last_signal_info({
-                    'direction': final_signal,
-                    'entry_price': latest_close,
-                    'tp1_level': tp1,
-                    'tp2_level': tp2,
-                    'sl_level': sl,
-                    'time': start_time_utc.astimezone(BotConfig.WIB_TZ).strftime('%H:%M:%S WIB'),
-                    'status': 'AKTIF'
-                })
-                self.state_manager.clear_user_tracking_messages()
-                bot_logger.info(f"✅ Manual signal {final_signal} generated successfully!")
+                if target_chat_id:
+                    # Send only to specific user (manual signal)
+                    await self.telegram_service._safe_send(bot.send_message(
+                        chat_id=target_chat_id,
+                        text=caption,
+                        parse_mode='Markdown'
+                    ))
+                    # Update only this user's state
+                    user_state = self.state_manager.get_user_state(target_chat_id)
+                    user_state['active_trade'] = temp_trade_info.copy()
+                    user_state['tracking_message_id'] = None
+                    if 'signal_history' not in user_state:
+                        user_state['signal_history'] = []
+                    user_state['signal_history'].append({
+                        'id': len(user_state['signal_history']) + 1,
+                        'direction': final_signal,
+                        'entry_price': latest_close,
+                        'tp1': tp1,
+                        'tp2': tp2,
+                        'sl': sl,
+                        'timestamp': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                        'result': 'PENDING'
+                    })
+                    self.state_manager.save_user_states()
+                    bot_logger.info(f"✅ Manual signal {final_signal} sent to user {target_chat_id} only!")
+                else:
+                    # Broadcast to all subscribers
+                    await self.telegram_service.send_to_all_subscribers(bot, caption)
+                    self._record_signal(temp_trade_info)
+                    self.state_manager.update_current_signal(temp_trade_info)
+                    self.state_manager.set_active_trade_for_subscribers(temp_trade_info)
+                    self.state_manager.update_last_signal_info({
+                        'direction': final_signal,
+                        'entry_price': latest_close,
+                        'tp1_level': tp1,
+                        'tp2_level': tp2,
+                        'sl_level': sl,
+                        'time': start_time_utc.astimezone(BotConfig.WIB_TZ).strftime('%H:%M:%S WIB'),
+                        'status': 'AKTIF'
+                    })
+                    self.state_manager.clear_user_tracking_messages()
+                    bot_logger.info(f"✅ Manual signal {final_signal} broadcast to all subscribers!")
+                
                 return True
             
             return False
