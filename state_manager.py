@@ -133,9 +133,6 @@ class StateManager:
         
         self.save_user_states()
         
-        # ALWAYS clear global signal on reset to stop tracking immediately
-        self.clear_current_signal()
-        
         return old_stats
     
     def update_trade_result(self, result_type: str) -> None:
