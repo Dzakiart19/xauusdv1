@@ -677,6 +677,12 @@ class SignalEngine:
                         continue
                 
                 else:
+                    # Double-check market is open before analysis
+                    if not BotConfig.is_market_open():
+                        bot_logger.debug("⏳ Market closed, skipping analysis...")
+                        await asyncio.sleep(30)
+                        continue
+                    
                     df = await self.get_historical_data()
                     
                     if df is None:

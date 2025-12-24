@@ -197,13 +197,13 @@ class DerivWebSocket:
                 
                 if self.candles_response and "error" in self.candles_response:
                     error_msg = self.candles_response['error'].get('message', 'Unknown error')
-                    logger.warning(f"Candles error: {error_msg} (attempt {attempt + 1}/{max_retries})")
+                    logger.debug(f"Candles error: {error_msg} (attempt {attempt + 1}/{max_retries})")
                     self._pending_requests.pop(request_id, None)
                     if attempt < max_retries - 1:
                         delay = 5 + (5 * (2 ** attempt))
-                        logger.info(f"Waiting {delay}s before retry due to API error...")
                         await asyncio.sleep(delay)
                         continue
+                    logger.warning(f"Candles failed after {max_retries} attempts: {error_msg}")
                     return None
                 
                 if self.candles_response is None:
